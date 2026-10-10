@@ -245,3 +245,12 @@ button.heat-cell:hover,button.heat-cell:focus-visible{outline:2px solid var(--de
 :root[data-theme="dark"] .template-tools{border-color:#3b5042}
 :root[data-theme="dark"] .template-card{background:#1d2e23;border-color:#3b5042}
 :root[data-theme="dark"] .template-card-meta{color:#b2c2b3}
+
+/* Personal, evidence-based observations */
+.personal-insights-card{margin:0 0 14px}
+.personal-insights-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+.personal-insight-row{display:flex;align-items:flex-start;gap:11px;min-width:0;padding:13px 14px;border:1px solid var(--line);border-radius:15px;background:var(--surface-soft,rgba(128,168,120,.08))}
+.personal-insight-row>span{font-size:1.2rem;line-height:1.4;flex:0 0 auto}
+.personal-insight-row p{margin:0;min-width:0;color:var(--text);font-size:.88rem;line-height:1.55;overflow-wrap:anywhere}
+@media(max-width:600px){.personal-insights-list{grid-template-columns:1fr}.personal-insight-row{padding:12px}}
+:root[data-theme="dark"] .personal-insight-row{background:rgba(160,190,150,.06);border-color:var(--line)}

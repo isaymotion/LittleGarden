@@ -88,3 +88,12 @@ The welcome banner uses `welcome-banner.jpg`; the install/app icon uses `app-ico
 - Selecting **Use template** fills the form with today's date; it does not save a transaction. Review the details and submit the form only after the expense has actually been paid.
 - Up to 40 templates can be saved. Templates can be deleted without affecting expense records.
 - When adding or editing an expense, the app checks for an existing record with the same date, amount, and description (ignoring description capitalization and extra spaces). A confirmation lets you cancel or save it anyway. Editing an existing entry does not flag that same entry as a duplicate.
+
+
+## Personal insights and cross-device transfer
+
+The Spending insights panel now creates short observations from actual recorded expenses: days with entries this month, the most frequently recorded category, a category with the largest increase over the previous month, and the largest transaction in the current year. Observations are descriptive, not budget alerts or judgments. When no matching data exists, the app avoids inventing a conclusion.
+
+To move your journal to another device, choose **Export transfer package** under Garden tools, move the downloaded JSON file using AirDrop, Files, email, or another method you trust, then choose that file on the receiving device. Review the confirmation summary before importing. Merge mode adds records while matching IDs and likely duplicate purchases are handled to reduce accidental duplication; replace mode replaces the expense journal and, for full transfer packages, templates and saved views. No account or remote server is used. Treat the transfer file as private because it contains your expense history.
+
+A transfer package includes expenses, recurring templates, and saved views. CSV exports are intended for spreadsheets and contain expenses only. Browser-local theme preferences and other device-specific settings are not transferred.

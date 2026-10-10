@@ -123,6 +123,10 @@
 
       <section class="panel insights-panel" aria-labelledby="insightsTitle">
         <div class="section-heading"><div><p class="eyebrow">PATTERNS, NOT PRESSURE</p><h2 id="insightsTitle">Spending insights</h2></div><span class="leaf-badge" aria-hidden="true">✧</span></div>
+        <article class="chart-card personal-insights-card">
+          <div><h3>Little observations</h3><p class="chart-subtitle">Gentle notes based only on your recorded expenses</p></div>
+          <div id="personalInsightsList" class="personal-insights-list" aria-live="polite"><p class="chart-subtitle">Add expenses to grow your insights.</p></div>
+        </article>
         <div class="insights-grid">
           <article class="chart-card insight-card">
             <div class="insight-heading"><div><h3>Top expenses</h3><p class="chart-subtitle">Largest entries in the selected month</p></div><label class="compact-select-label">Show <select id="topExpenseLimit" aria-label="Number of top expenses"><option value="5">Top 5</option><option value="10">Top 10</option></select></label></div>
@@ -197,7 +201,7 @@
         <div class="section-heading"><div><p class="eyebrow">YOUR DATA, YOURS TO KEEP</p><h2>Garden tools</h2></div></div>
         <div class="tools-grid">
           <div class="tool-item"><span class="tool-icon">↗</span><div><h3>Export records</h3><p>Save a full JSON backup or a spreadsheet-friendly CSV file.</p><div class="tool-buttons"><button id="exportCsvBtn" class="button button-outline" type="button">Export CSV</button><button id="exportJsonBtn2" class="button button-outline" type="button">Export JSON</button></div></div></div>
-          <div class="tool-item"><span class="tool-icon">↙</span><div><h3>Restore a backup</h3><p>Import a JSON backup or CSV. You can replace records or merge them.</p><div class="tool-buttons"><label class="button button-outline file-button" for="importFile">Choose file</label><input id="importFile" type="file" accept=".json,.csv,application/json,text/csv" hidden><select id="importMode" aria-label="Import mode"><option value="merge">Merge with current records</option><option value="replace">Replace all records</option></select></div><p id="importMessage" class="form-message" role="status" aria-live="polite"></p></div></div>
+          <div class="tool-item"><span class="tool-icon">↙</span><div><h3>Transfer to another device</h3><p>Export a transfer package, then import it on your other device. Everything stays in files you control—no account or remote server. Review the import before confirming.</p><div class="tool-buttons"><button id="transferExportBtn" class="button button-primary" type="button">Export transfer package</button><label class="button button-outline file-button" for="importFile">Choose backup file</label><input id="importFile" type="file" accept=".json,.csv,application/json,text/csv" hidden><select id="importMode" aria-label="Import mode"><option value="merge">Merge with current records</option><option value="replace">Replace all records</option></select></div><p id="importMessage" class="form-message" role="status" aria-live="polite"></p><p class="chart-subtitle">Merge keeps current records and adds or updates matching IDs. Identical date, amount, and description entries are flagged for review.</p></div></div>
           <div class="tool-item"><span class="tool-icon">♡</span><div><h3>Private by design</h3><p>Your entries stay in this browser using local storage. No account or server is required. Export backups regularly, especially before clearing browser data.</p></div></div>
           <div class="tool-item"><span class="tool-icon">☼</span><div><h3>Daily rhythm</h3><p>Use the date field to log expenses as you go. Your daily chart and monthly summary update automatically.</p></div></div>
         </div>

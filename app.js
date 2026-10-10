@@ -137,6 +137,7 @@
     $("undoDeleteBtn").addEventListener("click",undoDelete);
     $("exportJsonBtn").addEventListener("click",exportJSON);
     $("exportJsonBtn2").addEventListener("click",exportJSON);
+    $("transferExportBtn").addEventListener("click",exportTransferPackage);
     $("exportCsvBtn").addEventListener("click",exportCSV);
     $("importFile").addEventListener("change",importFile);
 
@@ -316,6 +317,7 @@
     $("rangeBStart").value=`${priorYear}-${priorMonthNum}-01`;$("rangeBEnd").value=`${priorYear}-${priorMonthNum}-${matchingDay}`;
   }
   function renderInsights(){
+    renderPersonalInsights();
     const month=selectedMonth(),monthRows=expenses.filter(e=>e.date.startsWith(month));
     const limit=Number($("topExpenseLimit").value)||5;
     const top=$("topExpensesList");top.innerHTML="";
@@ -331,6 +333,26 @@
     const catTotals=categories.map(c=>({name:c.name,icon:c.icon,total:sum(yearRows.filter(e=>e.category===c.name))})).sort((a,b)=>b.total-a.total);
     $("yearTopCategory").textContent=catTotals[0]?.total?`Highest category: ${catTotals[0].icon} ${catTotals[0].name} (${money(catTotals[0].total)})`:"Add entries to see your highest-spending category.";
     renderTrendChart($("trendYear").value||year);renderHeatmap($("heatmapYear").value||year);
+  }
+  function renderPersonalInsights(){
+    const host=$("personalInsightsList");
+    const today=localDate(),month=currentMonth(),year=today.slice(0,4);
+    const currentRows=expenses.filter(e=>e.date.startsWith(month));
+    const previousDate=new Date(Number(today.slice(0,4)),Number(today.slice(5,7))-2,1);
+    const previousMonth=`${previousDate.getFullYear()}-${String(previousDate.getMonth()+1).padStart(2,"0")}`;
+    const observations=[];
+    const days=new Set(currentRows.map(e=>e.date));
+    observations.push({icon:"🌱",text:currentRows.length?`You recorded expenses on ${days.size} ${days.size===1?"day":"days"} this month.`:"No expenses have been recorded this month yet."});
+    const categoryCounts=categories.map(c=>({category:c,count:currentRows.filter(e=>e.category===c.name).length,total:sum(currentRows.filter(e=>e.category===c.name))})).filter(x=>x.count>0).sort((a,b)=>b.count-a.count||b.total-a.total);
+    if(categoryCounts.length){const leaders=categoryCounts.filter(x=>x.count===categoryCounts[0].count);const names=leaders.map(x=>`${x.category.icon} ${x.category.name}`).join(", ");observations.push({icon:"🌷",text:`Most frequently recorded this month: ${names} (${categoryCounts[0].count} ${categoryCounts[0].count===1?"entry":"entries"}).`});}
+    const currentTotals=categories.map(c=>({category:c,total:sum(expenses.filter(e=>e.date.startsWith(month)&&e.category===c.name)),previous:sum(expenses.filter(e=>e.date.startsWith(previousMonth)&&e.category===c.name))}));
+    const increases=currentTotals.filter(x=>x.total>x.previous).sort((a,b)=>(b.total-b.previous)-(a.total-a.previous));
+    if(increases.length){const item=increases[0],delta=item.total-item.previous;observations.push({icon:"🍃",text:`${item.category.name} spending was ${money(delta)} higher than ${previousDate.toLocaleDateString("en-PH",{month:"long",year:"numeric"})}.`});}
+    else if(currentRows.length){observations.push({icon:"🍃",text:"No category is currently higher than the previous month."});}
+    const yearRows=expenses.filter(e=>e.date.startsWith(year)).sort((a,b)=>b.price-a.price||b.date.localeCompare(a.date));
+    if(yearRows.length){const e=yearRows[0];observations.push({icon:"✨",text:`Largest transaction this year: ${money(e.price)} for “${e.item}” on ${new Date(e.date+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"numeric"})}.`});}
+    if(!observations.length){host.innerHTML='<p class="chart-subtitle">Add a few expenses and these observations will grow from your actual records.</p>';return;}
+    host.innerHTML=observations.map(o=>`<div class="personal-insight-row"><span aria-hidden="true">${o.icon}</span><p>${escapeHTML(o.text)}</p></div>`).join("");
   }
   function renderTrendChart(year){
     const holder=$("spendingTrends"),legend=$("trendLegend");holder.innerHTML="";legend.innerHTML="";
@@ -459,8 +481,14 @@
     const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   function exportJSON(){
-    const payload={app:"Little Garden Expense Tracker",schemaVersion:1,currency:"PHP",exportedAt:new Date().toISOString(),categories:categoryNames,expenses};
-    downloadFile(`little-garden-expenses-${localDate()}.json`,JSON.stringify(payload,null,2),"application/json;charset=utf-8");
+    const payload={app:"Little Garden Expense Tracker",schemaVersion:2,currency:"PHP",exportType:"full-backup",exportedAt:new Date().toISOString(),categories:categoryNames,expenses,templates:expenseTemplates,savedViews:customViews};
+    downloadFile(`little-garden-backup-${localDate()}.json`,JSON.stringify(payload,null,2),"application/json;charset=utf-8");
+  }
+  function exportTransferPackage(){
+    const payload={app:"Little Garden Expense Tracker",schemaVersion:2,currency:"PHP",exportType:"device-transfer",exportedAt:new Date().toISOString(),categories:categoryNames,expenses,templates:expenseTemplates,savedViews:customViews};
+    downloadFile(`little-garden-transfer-${localDate()}.json`,JSON.stringify(payload,null,2),"application/json;charset=utf-8");
+    $("importMessage").textContent="Transfer package created. Move this file to your other device, choose it there, review the import, then confirm.";
+    $("importMessage").style.color="var(--deep)";
   }
   function csvCell(value){const s=String(value??"");return /[",\r\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;}
   function exportCSV(){
@@ -479,24 +507,61 @@
   async function importFile(event){
     const file=event.target.files?.[0];if(!file)return;const message=$("importMessage");message.textContent="";
     try{
-      if(file.size>15*1024*1024)throw new Error("File is larger than 15 MB. Please use a smaller backup.");
-      const text=await file.text();let imported;
-      if(file.name.toLowerCase().endsWith(".csv")||file.type==="text/csv")imported=parseCSV(text);
+      if(file.size>25*1024*1024)throw new Error("File is larger than 25 MB. Please use a smaller backup.");
+      const text=await file.text();let imported=[],parsed=null,isPackage=false;
+      if(file.name.toLowerCase().endsWith(".csv")||file.type==="text/csv") imported=parseCSV(text);
       else{
-        const parsed=JSON.parse(text);const list=Array.isArray(parsed)?parsed:parsed.expenses;
-        if(!Array.isArray(list))throw new Error("JSON backup should contain an expenses array.");
-        imported=list.map((e,i)=>normalizeExpense(e,i));
+        parsed=JSON.parse(text);const list=Array.isArray(parsed)?parsed:parsed.expenses;
+        if(!Array.isArray(list))throw new Error("Backup should contain an expenses array.");
+        imported=list.map((e,i)=>normalizeExpense(e,i));isPackage=!!(parsed&&typeof parsed==="object"&&(Array.isArray(parsed.templates)||Array.isArray(parsed.savedViews)));
       }
-      const unique=new Map();
-      if($("importMode").value==="merge")expenses.forEach(e=>unique.set(e.id,e));
-      imported.forEach(e=>unique.set(e.id,e));
-      const result=[...unique.values()];
+      const mode=$("importMode").value,existingIds=new Set(mode==="merge"?expenses.map(e=>e.id):[]);
+      const signatures=new Set(mode==="merge"?expenses.map(e=>expenseSignature(e)):[]);
+      let sameId=0,duplicates=0,newRecords=0;
+      imported.forEach(e=>{if(existingIds.has(e.id))sameId++;else if(signatures.has(expenseSignature(e)))duplicates++;else newRecords++;});
+      const templateCount=isPackage&&Array.isArray(parsed.templates)?parsed.templates.length:0;
+      const viewCount=isPackage&&Array.isArray(parsed.savedViews)?parsed.savedViews.length:0;
+      const summary=`File: ${file.name}
+Expenses in file: ${imported.length}
+New records: ${mode==="replace"?imported.length:newRecords}
+Matching record IDs: ${mode==="merge"?sameId:0}
+Possible duplicate purchases: ${mode==="merge"?duplicates:0}
+Templates: ${templateCount}
+Saved views: ${viewCount}
+
+Import mode: ${mode==="merge"?"Merge with current records":"Replace all current expense records"}.`;
+      if(!window.confirm(`${summary}
+
+Continue?${duplicates?" Possible duplicates will be skipped during merge.":""}`)) {message.textContent="Import cancelled. Nothing was changed.";return;}
+      let result=[];
+      if(mode==="replace") result=imported;
+      else{
+        const byId=new Map(expenses.map(e=>[e.id,e]));
+        const seen=new Set(expenses.map(expenseSignature));
+        imported.forEach(e=>{
+          if(byId.has(e.id)){byId.set(e.id,e);return;}
+          const sig=expenseSignature(e);if(seen.has(sig))return;
+          byId.set(e.id,e);seen.add(sig);
+        });
+        result=[...byId.values()];
+      }
       if(result.length>100000)throw new Error("Import would exceed 100,000 records.");
       const previous=expenses;expenses=result;
       if(!saveExpenses()){expenses=previous;return;}
-      renderAll();message.textContent=`Imported ${imported.length} record${imported.length===1?"":"s"} (${ $("importMode").value==="merge"?"merged":"replaced"}).`;message.style.color="var(--deep)";
+      if(isPackage){
+        const incomingTemplates=Array.isArray(parsed.templates)?parsed.templates.filter(t=>t&&typeof t.name==="string"&&String(t.item||"").trim()&&categoryNames.includes(t.category)).map(t=>({id:String(t.id||makeId()),name:String(t.name).slice(0,60),item:String(t.item).slice(0,120),price:Number(t.price)||0,category:t.category,notes:String(t.notes||"").slice(0,500)})):[];
+        const incomingViews=Array.isArray(parsed.savedViews)?parsed.savedViews.filter(v=>v&&typeof v.name==="string"&&v.state).map(v=>({name:v.name.slice(0,40),state:{query:String(v.state.query||""),category:categoryNames.includes(v.state.category)?v.state.category:"",month:String(v.state.month||""),sort:String(v.state.sort||"date-desc")}})):[];
+        if(mode==="replace") {expenseTemplates=incomingTemplates;customViews=incomingViews;}
+        else{
+          const templateMap=new Map(expenseTemplates.map(t=>[t.id,t]));incomingTemplates.forEach(t=>templateMap.set(t.id,t));expenseTemplates=[...templateMap.values()];
+          const viewNames=new Set(customViews.map(v=>v.name.toLowerCase()));incomingViews.forEach(v=>{if(!viewNames.has(v.name.toLowerCase()))customViews.push(v);});
+        }
+        try{localStorage.setItem(TEMPLATE_STORAGE_KEY,JSON.stringify(expenseTemplates));localStorage.setItem("little-garden-saved-views",JSON.stringify(customViews));}catch(e){message.textContent="Expenses imported, but templates or saved views could not all be saved because browser storage is full.";message.style.color="#a84943";renderAll();return;}
+      }
+      renderAll();message.textContent=`Transfer complete: ${expenses.length} expense records now available. ${isPackage?`${expenseTemplates.length} templates and ${customViews.length} saved views available.`:"CSV/expense records imported."}`;message.style.color="var(--deep)";
     }catch(err){message.textContent=`Import failed: ${err.message}`;message.style.color="#a84943";}
     finally{event.target.value="";}
   }
+  function expenseSignature(e){return `${e.date}|${Math.round(Number(e.price)*100)}|${normalizeDescription(e.item)}`;}
   init();
 })();
