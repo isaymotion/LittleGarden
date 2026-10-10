@@ -254,3 +254,61 @@ button.heat-cell:hover,button.heat-cell:focus-visible{outline:2px solid var(--de
 .personal-insight-row p{margin:0;min-width:0;color:var(--text);font-size:.88rem;line-height:1.55;overflow-wrap:anywhere}
 @media(max-width:600px){.personal-insights-list{grid-template-columns:1fr}.personal-insight-row{padding:12px}}
 :root[data-theme="dark"] .personal-insight-row{background:rgba(160,190,150,.06);border-color:var(--line)}
+
+
+/* Responsive overflow fix — keep CSS in the stylesheet, never in page text */
+*, *::before, *::after { box-sizing: border-box; }
+html { width: 100%; max-width: 100%; overflow-x: hidden; }
+body { width: 100%; max-width: 100%; margin: 0; overflow-x: hidden; }
+.app-shell, main, .topbar, .panel, .welcome, .content-grid, .entry-panel,
+.transactions-panel, .insights-panel, .insights-grid, .chart-grid, .summary-grid,
+.summary-card, .section-heading, .toolbar, .field-row, .form-actions,
+.tool-buttons, .date-range-card, .trend-card, .heatmap-card, .insight-card,
+.personal-insights-card, .personal-insights-list, .template-tools, .tool-item,
+.app-footer { min-width: 0; max-width: 100%; }
+.app-shell { width: 100%; }
+.topbar { flex-wrap: wrap; }
+.brand { min-width: 0; max-width: 100%; flex: 1 1 180px; }
+.brand > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.top-actions { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+.welcome-banner { display: block; width: 100%; max-width: 100%; height: auto; }
+input, select, textarea, button { max-width: 100%; min-width: 0; }
+input, select, textarea { width: 100%; }
+img, svg, canvas { max-width: 100%; }
+.summary-grid > *, .content-grid > *, .insights-grid > *, .chart-grid > *,
+.date-range-form > *, .range-summary > *, .year-summary-grid > * { min-width: 0; }
+.table-wrap { width: 100%; max-width: 100%; overflow-x: auto; }
+.trend-chart { width: 100%; max-width: 100%; overflow-x: auto; }
+.trend-chart svg { max-width: none; }
+.app-footer, .app-footer * { overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .topbar { align-items: flex-start; }
+  .brand { flex: 1 1 100%; }
+  .top-actions { width: 100%; justify-content: flex-start; }
+  .top-actions .button { flex: 0 1 auto; white-space: normal; }
+  .summary-grid { grid-template-columns: minmax(0, 1fr); }
+  .summary-card { overflow-wrap: anywhere; }
+  .welcome { width: 100%; }
+  .welcome-banner { height: auto; max-height: none; object-fit: contain; }
+  .entry-panel form, .field-row, .field-row > * { min-width: 0; max-width: 100%; }
+  .insight-heading { min-width: 0; flex-wrap: wrap; }
+  .date-range-form { grid-template-columns: minmax(0, 1fr); }
+  .date-range-form > .button { grid-column: auto; }
+  .range-summary { grid-template-columns: minmax(0, 1fr); }
+  .comparison-grid { grid-template-columns: minmax(0, 1fr); }
+  .tool-buttons { display: flex; flex-wrap: wrap; }
+  .tool-item { grid-template-columns: minmax(0, 1fr); }
+  .app-footer { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+}
+@media (max-width: 390px) {
+  .app-shell { padding-left: 10px; padding-right: 10px; }
+  .panel { padding: 15px; }
+  .top-actions { gap: 6px; }
+  .top-actions .button { font-size: .7rem; padding: 7px 9px; }
+  .summary-grid { grid-template-columns: minmax(0, 1fr); }
+  .summary-card:last-child { grid-column: auto; }
+  .year-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .range-summary { grid-template-columns: minmax(0, 1fr); }
+  .comparison-grid { grid-template-columns: minmax(0, 1fr); }
+  .tool-buttons > *, .tool-buttons .button { max-width: 100%; }
+}
