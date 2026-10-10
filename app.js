@@ -1,6 +1,7 @@
 (() => {
   "use strict";
   const STORAGE_KEY = "little-garden-expenses-v1";
+  const TEMPLATE_STORAGE_KEY = "little-garden-expense-templates-v1";
   const categories = [
     {name:"Groceries", icon:"🥬", area:"Daily living", color:"#80a878"},
     {name:"Restaurants & Dining", icon:"🍲", area:"Daily living", color:"#e7b66c"},
@@ -30,6 +31,11 @@
   let expenses = loadExpenses();
   let deleteTarget = null;
   let installPrompt = null;
+  let selectedCalendarDate = "";
+  let undoEntry = null;
+  let undoTimer = null;
+  let customViews = loadCustomViews();
+  let expenseTemplates = loadExpenseTemplates();
 
   function validDate(s){ return typeof s==="string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s+"T00:00:00")); }
   function normalizeExpense(raw, index=0) {
@@ -72,8 +78,10 @@
       $("expenseCategory").add(new Option(`${c.icon} ${c.name}`,c.name));
       $("categoryFilter").add(new Option(c.name,c.name));
     });
+    try { const lastCategory=localStorage.getItem("little-garden-last-category"); if(categoryNames.includes(lastCategory)) $("expenseCategory").value=lastCategory; } catch(e) {}
     initTheme();
     bindEvents();
+    initInsightControls();
     renderAll();
     if("serviceWorker" in navigator && location.protocol!=="file:") navigator.serviceWorker.register("./sw.js").catch(err=>console.warn("Offline cache unavailable",err));
   }
@@ -97,13 +105,41 @@
   function bindEvents(){
     $("expenseForm").addEventListener("submit",onSave);
     $("cancelEditBtn").addEventListener("click",resetForm);
+    $("saveTemplateBtn").addEventListener("click",saveCurrentAsTemplate);
+    $("templateList").addEventListener("click",event=>{
+      const use=event.target.closest("[data-use-template]");
+      const remove=event.target.closest("[data-delete-template]");
+      if(use) applyExpenseTemplate(use.dataset.useTemplate);
+      if(remove) deleteExpenseTemplate(remove.dataset.deleteTemplate);
+    });
     ["searchInput","categoryFilter","monthFilter","sortFilter"].forEach(id=>$(id).addEventListener(id==="searchInput"?"input":"change",renderExpenses));
-    $("reportMonth").addEventListener("change",renderReports);
+    $("reportMonth").addEventListener("change",()=>{selectedCalendarDate="";$("clearCalendarDate").classList.add("hidden");renderAll();});
+    ["topExpenseLimit","yearSummaryYear","trendYear","heatmapYear"].forEach(id=>$(id).addEventListener("change",renderInsights));
+    $("dateRangeForm").addEventListener("submit",renderDateRangeComparison);
+    ["categoryChart","areaChart","categoryLegend","areaLegend"].forEach(id=>$(id).addEventListener("keydown",event=>{
+      if((event.key==="Enter"||event.key===" ")&&event.target.closest("[data-chart-name]")){event.preventDefault();event.target.closest("[data-chart-name]").click();}
+    }));
+    ["categoryChart","areaChart","categoryLegend","areaLegend"].forEach(id=>$(id).addEventListener("click",event=>{
+      const target=event.target.closest("[data-chart-name]");
+      if(!target)return;
+      const name=target.dataset.chartName;
+      $("searchInput").value="";
+      if(id==="categoryChart"||id==="categoryLegend"){ $("categoryFilter").value=name; }
+      else { $("categoryFilter").value=""; $("searchInput").value=name; }
+      $("monthFilter").value=selectedMonth();selectedCalendarDate="";renderAll();
+      $("transactionsTitle").scrollIntoView({behavior:"smooth",block:"start"});
+    }));
+    $("clearCalendarDate").addEventListener("click",()=>{selectedCalendarDate="";renderAll();});
+    $("addOnSelectedDayBtn").addEventListener("click",()=>{if(!selectedCalendarDate)return;resetForm();$("expenseDate").value=selectedCalendarDate;$("expenseItem").focus();$("entryTitle").textContent="New expense";document.querySelector(".entry-panel").scrollIntoView({behavior:"smooth",block:"start"});});
+    $("saveViewBtn").addEventListener("click",saveCurrentView);
+    $("savedViewSelect").addEventListener("change",applySavedView);
+    $("resetFiltersBtn").addEventListener("click",resetFilters);
+    $("undoDeleteBtn").addEventListener("click",undoDelete);
     $("exportJsonBtn").addEventListener("click",exportJSON);
     $("exportJsonBtn2").addEventListener("click",exportJSON);
     $("exportCsvBtn").addEventListener("click",exportCSV);
     $("importFile").addEventListener("change",importFile);
-    $("confirmDeleteBtn").addEventListener("click",()=>{ if(deleteTarget){expenses=expenses.filter(e=>e.id!==deleteTarget);saveExpenses();deleteTarget=null;renderAll();} });
+
     window.addEventListener("beforeinstallprompt",event=>{event.preventDefault();installPrompt=event;$("installBtn").classList.remove("hidden");});
     $("installBtn").addEventListener("click",async()=>{if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$("installBtn").classList.add("hidden");});
     window.addEventListener("storage",event=>{if(event.key===STORAGE_KEY){expenses=loadExpenses();renderAll();}});
@@ -114,15 +150,22 @@
     const raw={id:id||makeId(),date:$("expenseDate").value,item:$("expenseItem").value,price:$("expensePrice").value,category:$("expenseCategory").value,notes:$("expenseNotes").value};
     let entry;
     try{entry=normalizeExpense(raw);}catch(e){$("formMessage").textContent=e.message;return;}
+    const duplicate=expenses.find(e=>e.id!==id && e.date===entry.date && Math.round(e.price*100)===Math.round(entry.price*100) && normalizeDescription(e.item)===normalizeDescription(entry.item));
+    if(duplicate){
+      const message=`A similar expense already exists on ${duplicate.date}: “${duplicate.item}” (${money(duplicate.price)}).\n\nSave this as a separate entry anyway?`;
+      if(!window.confirm(message)) return;
+    }
     if(id){const old=expenses.find(e=>e.id===id);entry.createdAt=old?.createdAt||entry.createdAt;expenses=expenses.map(e=>e.id===id?entry:e);}
     else expenses.push(entry);
+    try { localStorage.setItem("little-garden-last-category",entry.category); } catch(e) {}
     if(!saveExpenses())return;
     resetForm();renderAll();
     $("formMessage").textContent=id?"Expense updated.":"Expense added to your garden.";
   }
   function resetForm(){
     $("expenseForm").reset();$("expenseId").value="";$("expenseDate").value=localDate();
-    $("saveExpenseBtn").textContent="Add expense";$("cancelEditBtn").classList.add("hidden");
+    $("saveExpenseBtn").textContent="Add expense";$("cancelEditBtn").classList.add("hidden");$("entryTitle").textContent="New expense";
+    try { const lastCategory=localStorage.getItem("little-garden-last-category"); if(categoryNames.includes(lastCategory)) $("expenseCategory").value=lastCategory; } catch(e) {}
     $("formMessage").textContent="";
   }
   function editExpense(id){
@@ -132,11 +175,81 @@
     $("entryTitle").textContent="Edit expense";$("expenseItem").focus();window.scrollTo({top:0,behavior:"smooth"});
   }
   function askDelete(id){
-    deleteTarget=id;const dialog=$("confirmDialog");
-    if(typeof dialog.showModal==="function")dialog.showModal();
-    else if(confirm("Delete this expense?")){$("confirmDeleteBtn").click();}
+    const entry=expenses.find(e=>e.id===id);if(!entry)return;
+    undoEntry={entry,index:expenses.findIndex(e=>e.id===id)};
+    expenses=expenses.filter(e=>e.id!==id);
+    if(!saveExpenses()){expenses.splice(undoEntry.index,0,entry);undoEntry=null;return;}
+    renderAll();showUndoToast(`Deleted “${entry.item}”.`);
   }
-  function renderAll(){renderSummary();renderReports();renderMonthFilter();renderExpenses();$("allCount").textContent=`${expenses.length} ${expenses.length===1?"entry":"entries"}`;}
+  function showUndoToast(message){
+    const toast=$("undoToast");$("undoMessage").textContent=message;toast.hidden=false;
+    if(undoTimer)clearTimeout(undoTimer);
+    undoTimer=setTimeout(()=>{toast.hidden=true;undoEntry=null;undoTimer=null;},8000);
+  }
+  function undoDelete(){
+    if(!undoEntry)return;
+    if(expenses.some(e=>e.id===undoEntry.entry.id)){undoEntry=null;$("undoToast").hidden=true;return;}
+    expenses.splice(Math.min(undoEntry.index,expenses.length),0,undoEntry.entry);
+    if(saveExpenses()){renderAll();$("undoToast").hidden=true;if(undoTimer)clearTimeout(undoTimer);undoTimer=null;undoEntry=null;}
+  }
+  function normalizeDescription(value){return String(value||"").trim().toLocaleLowerCase().replace(/\s+/g," ");}
+  function loadExpenseTemplates(){
+    try{
+      const raw=JSON.parse(localStorage.getItem(TEMPLATE_STORAGE_KEY)||"[]");
+      if(!Array.isArray(raw))return [];
+      return raw.filter(t=>t&&typeof t==="object"&&String(t.name||"").trim()&&String(t.item||"").trim()&&categoryNames.includes(t.category))
+        .map(t=>({id:String(t.id||makeId()),name:String(t.name).slice(0,60),item:String(t.item).slice(0,120),price:Number(t.price)||0,category:t.category,notes:String(t.notes||"").slice(0,500)}));
+    }catch(e){return [];}
+  }
+  function saveExpenseTemplates(){
+    try{localStorage.setItem(TEMPLATE_STORAGE_KEY,JSON.stringify(expenseTemplates));return true;}
+    catch(e){alert("Could not save templates in this browser. Try removing a few templates or checking browser storage settings.");return false;}
+  }
+  function saveCurrentAsTemplate(){
+    const item=$("expenseItem").value.trim();
+    const price=Number($("expensePrice").value);
+    const category=$("expenseCategory").value;
+    if(!item||!Number.isFinite(price)||price<=0||!categoryNames.includes(category)){
+      $("formMessage").textContent="Enter a description, valid amount, and category first, then save the details as a template.";
+      $("expenseItem").focus();return;
+    }
+    if(expenseTemplates.length>=40){alert("You can keep up to 40 templates. Delete an old template to add another.");return;}
+    const suggested=item.length>34?item.slice(0,34).trim():item;
+    const name=window.prompt("Name this reusable template:",suggested);
+    if(name===null)return;
+    const cleanName=name.trim().slice(0,60);
+    if(!cleanName){alert("Please give the template a name.");return;}
+    expenseTemplates.push({id:makeId(),name:cleanName,item,price:Math.round(price*100)/100,category,notes:$ ("expenseNotes").value.trim().slice(0,500)});
+    if(saveExpenseTemplates()){
+      renderExpenseTemplates();
+      $("formMessage").textContent=`Template “${cleanName}” saved. It will not create an expense until you submit the form.`;
+    }
+  }
+  function applyExpenseTemplate(id){
+    const template=expenseTemplates.find(t=>t.id===id);if(!template)return;
+    resetForm();
+    $("expenseDate").value=localDate();
+    $("expenseItem").value=template.item;
+    $("expensePrice").value=template.price||"";
+    $("expenseCategory").value=template.category;
+    $("expenseNotes").value=template.notes;
+    $("formMessage").textContent=`“${template.name}” loaded. Check the details and submit only after you have paid this expense.`;
+    $("entryTitle").textContent="Confirm expense from template";
+    $("expenseItem").focus();
+    document.querySelector(".entry-panel").scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  function deleteExpenseTemplate(id){
+    const template=expenseTemplates.find(t=>t.id===id);if(!template)return;
+    if(!window.confirm(`Delete the template “${template.name}”? This will not affect recorded expenses.`))return;
+    expenseTemplates=expenseTemplates.filter(t=>t.id!==id);
+    if(saveExpenseTemplates())renderExpenseTemplates();
+  }
+  function renderExpenseTemplates(){
+    const host=$("templateList");if(!host)return;
+    if(!expenseTemplates.length){host.innerHTML='<p class="empty-state">No templates yet. Fill in an expense and save it as a template.</p>';return;}
+    host.innerHTML=expenseTemplates.map(t=>`<article class="template-card"><div class="template-card-main"><span class="template-card-title">${escapeHTML(t.name)}</span><span class="template-card-meta">${escapeHTML(t.item)} · ${money(t.price)} · ${escapeHTML(t.category)}</span></div><div class="template-card-actions"><button class="button button-primary" type="button" data-use-template="${escapeHTML(t.id)}">Use template</button><button class="button button-quiet" type="button" data-delete-template="${escapeHTML(t.id)}" aria-label="Delete template ${escapeHTML(t.name)}">Delete</button></div></article>`).join("");
+  }
+  function renderAll(){renderSummary();renderReports();renderMonthFilter();renderExpenses();renderCalendar();renderComparison();renderSavedViews();renderInsights();renderExpenseTemplates();$("allCount").textContent=`${expenses.length} ${expenses.length===1?"entry":"entries"}`;}
   function selectedMonth(){return $("reportMonth").value||currentMonth();}
   function renderSummary(){
     const month=selectedMonth();const rows=expenses.filter(e=>e.date.startsWith(month));const [y,m]=month.split("-").map(Number);
@@ -160,7 +273,7 @@
         const x1=cx+r*Math.cos(angle),y1=cy+r*Math.sin(angle),x2=cx+r*Math.cos(end),y2=cy+r*Math.sin(end);
         path=document.createElementNS(ns,"path");path.setAttribute("d",`M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${slice>Math.PI?1:0} 1 ${x2} ${y2} Z`);path.setAttribute("fill",item.color);path.setAttribute("stroke","#fffdf7");path.setAttribute("stroke-width","1.5");
       }
-      svg.appendChild(path);angle=end;
+      path.dataset.chartName=item.name;path.classList.add("chart-segment");path.setAttribute("tabindex","0");path.setAttribute("role","button");path.setAttribute("aria-label",`Show ${item.name} transactions`);svg.appendChild(path);angle=end;
     });
     const hole=document.createElementNS(ns,"circle");hole.setAttribute("cx",cx);hole.setAttribute("cy",cy);hole.setAttribute("r","52");hole.setAttribute("fill","#fffdf7");svg.appendChild(hole);
     const label=document.createElementNS(ns,"text");label.setAttribute("x",cx);label.setAttribute("y",cy-2);label.setAttribute("text-anchor","middle");label.setAttribute("class","pie-center");label.textContent=money(total);svg.appendChild(label);
@@ -168,6 +281,7 @@
     chart.appendChild(svg);
     items.filter(i=>i.value>0).sort((a,b)=>b.value-a.value).forEach(item=>{
       const row=document.createElement("div");row.className="legend-item";
+      row.dataset.chartName=item.name;row.classList.add("legend-item-clickable");row.tabIndex=0;row.setAttribute("role","button");row.setAttribute("aria-label",`Show ${item.name} transactions`);
       row.innerHTML=`<span class="legend-dot" style="background:${item.color}"></span><span class="legend-name">${escapeHTML(item.icon?item.icon+" ":"")}${escapeHTML(item.name)}</span><span class="legend-value">${money(item.value)}</span>`;
       legend.appendChild(row);
     });
@@ -183,8 +297,86 @@
       col.append(bar,day);el.appendChild(col);
     });
   }
+
+  function initInsightControls(){
+    const years=new Set([String(new Date().getFullYear()),selectedMonth().slice(0,4)]);
+    expenses.forEach(e=>years.add(e.date.slice(0,4)));
+    const list=[...years].sort().reverse();
+    ["yearSummaryYear","trendYear","heatmapYear"].forEach(id=>{
+      const select=$(id);select.innerHTML="";
+      list.forEach(y=>select.add(new Option(y,y)));
+      select.value=selectedMonth().slice(0,4);
+    });
+    const today=localDate(),monthStart=`${today.slice(0,7)}-01`;
+    $("rangeAStart").value=monthStart;$("rangeAEnd").value=today;
+    const priorMonth=new Date(Number(today.slice(0,4)),Number(today.slice(5,7))-2,1);
+    const priorYear=priorMonth.getFullYear(),priorMonthNum=String(priorMonth.getMonth()+1).padStart(2,"0");
+    const priorDays=new Date(priorYear,priorMonth.getMonth()+1,0).getDate();
+    const matchingDay=String(Math.min(Number(today.slice(8,10)),priorDays)).padStart(2,"0");
+    $("rangeBStart").value=`${priorYear}-${priorMonthNum}-01`;$("rangeBEnd").value=`${priorYear}-${priorMonthNum}-${matchingDay}`;
+  }
+  function renderInsights(){
+    const month=selectedMonth(),monthRows=expenses.filter(e=>e.date.startsWith(month));
+    const limit=Number($("topExpenseLimit").value)||5;
+    const top=$("topExpensesList");top.innerHTML="";
+    [...monthRows].sort((a,b)=>b.price-a.price).slice(0,limit).forEach((e,i)=>{
+      const row=document.createElement("button");row.type="button";row.className="top-expense-row";
+      row.innerHTML=`<span class="top-rank">${i+1}</span><span class="top-expense-info"><strong>${escapeHTML(e.item)}</strong><small>${escapeHTML(e.date)} · ${escapeHTML(e.category)}</small></span><strong class="top-expense-amount">${money(e.price)}</strong>`;
+      row.addEventListener("click",()=>{resetFilters();$("monthFilter").value=month;$("searchInput").value=e.item;renderExpenses();$("transactionsTitle").scrollIntoView({behavior:"smooth",block:"start"});});
+      top.appendChild(row);
+    });
+    if(!top.children.length)top.innerHTML='<p class="chart-subtitle">Your largest expenses for this month will appear here.</p>';
+    const year=$("yearSummaryYear").value||new Date().getFullYear().toString(),yearRows=expenses.filter(e=>e.date.startsWith(year)),yearTotal=sum(yearRows);
+    $("yearTotal").textContent=money(yearTotal);$("yearMonthlyAverage").textContent=money(yearTotal/12);$("yearEntryCount").textContent=String(yearRows.length);
+    const catTotals=categories.map(c=>({name:c.name,icon:c.icon,total:sum(yearRows.filter(e=>e.category===c.name))})).sort((a,b)=>b.total-a.total);
+    $("yearTopCategory").textContent=catTotals[0]?.total?`Highest category: ${catTotals[0].icon} ${catTotals[0].name} (${money(catTotals[0].total)})`:"Add entries to see your highest-spending category.";
+    renderTrendChart($("trendYear").value||year);renderHeatmap($("heatmapYear").value||year);
+  }
+  function renderTrendChart(year){
+    const holder=$("spendingTrends"),legend=$("trendLegend");holder.innerHTML="";legend.innerHTML="";
+    const ns="http://www.w3.org/2000/svg",svg=document.createElementNS(ns,"svg");svg.setAttribute("viewBox","0 0 720 250");svg.setAttribute("role","img");svg.setAttribute("aria-label",`Monthly category spending in ${year}`);
+    const monthly=categories.map(c=>({category:c,values:Array.from({length:12},(_,m)=>sum(expenses.filter(e=>e.date.startsWith(`${year}-${String(m+1).padStart(2,"0")}`)&&e.category===c.name)))}));
+    const max=Math.max(1,...monthly.flatMap(x=>x.values));const left=44,right=700,top=15,bottom=205;
+    for(let g=0;g<=4;g++){const y=bottom-(bottom-top)*g/4,line=document.createElementNS(ns,"line");line.setAttribute("x1",left);line.setAttribute("x2",right);line.setAttribute("y1",y);line.setAttribute("y2",y);line.setAttribute("class","trend-gridline");svg.appendChild(line);const lab=document.createElementNS(ns,"text");lab.setAttribute("x",left-7);lab.setAttribute("y",y+4);lab.setAttribute("text-anchor","end");lab.setAttribute("class","trend-axis-label");lab.textContent=compactMoney(max*g/4);svg.appendChild(lab);}
+    const monthNames=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    monthNames.forEach((m,i)=>{const x=left+(right-left)*i/11,t=document.createElementNS(ns,"text");t.setAttribute("x",x);t.setAttribute("y",228);t.setAttribute("text-anchor","middle");t.setAttribute("class","trend-axis-label");t.textContent=m;svg.appendChild(t);});
+    monthly.forEach(({category,values})=>{
+      const points=values.map((v,i)=>`${left+(right-left)*i/11},${bottom-(bottom-top)*v/max}`).join(" ");
+      const line=document.createElementNS(ns,"polyline");line.setAttribute("points",points);line.setAttribute("fill","none");line.setAttribute("stroke",category.color);line.setAttribute("stroke-width","2.2");line.setAttribute("stroke-linejoin","round");line.setAttribute("stroke-linecap","round");line.setAttribute("class","trend-line");line.setAttribute("data-chart-name",category.name);svg.appendChild(line);
+      values.forEach((v,i)=>{if(!v)return;const dot=document.createElementNS(ns,"circle");dot.setAttribute("cx",left+(right-left)*i/11);dot.setAttribute("cy",bottom-(bottom-top)*v/max);dot.setAttribute("r","3.2");dot.setAttribute("fill",category.color);dot.setAttribute("aria-label",`${monthNames[i]} ${category.name}: ${money(v)}`);svg.appendChild(dot);});
+      const button=document.createElement("button");button.type="button";button.className="trend-legend-item";button.innerHTML=`<i style="background:${category.color}"></i>${category.icon} ${escapeHTML(category.name)}`;button.addEventListener("click",()=>{ $("categoryFilter").value=category.name;$("monthFilter").value="";$("searchInput").value="";selectedCalendarDate="";renderExpenses();$("transactionsTitle").scrollIntoView({behavior:"smooth",block:"start"});});legend.appendChild(button);
+    });
+    holder.appendChild(svg);
+  }
+  function renderHeatmap(year){
+    const holder=$("spendingHeatmap");holder.innerHTML="";
+    const values=expenses.filter(e=>e.date.startsWith(year)).reduce((o,e)=>(o[e.date]=(o[e.date]||0)+e.price,o),{});
+    const max=Math.max(0,...Object.values(values));const start=new Date(Number(year),0,1),days=new Date(Number(year),1,0).getDate()+(new Date(Number(year),1,0).getDate()===29?0:0);
+    const offset=(start.getDay()+6)%7;
+    for(let i=0;i<offset;i++){const blank=document.createElement("span");blank.className="heat-cell heat-empty";holder.appendChild(blank);}
+    const totalDays=(new Date(Number(year)+1,0,1)-new Date(Number(year),0,1))/86400000;
+    for(let i=0;i<totalDays;i++){
+      const d=new Date(Number(year),0,i+1),date=localDate(d),amount=values[date]||0,ratio=max?amount/max:0,level=amount===0?0:ratio>.75?4:ratio>.5?3:ratio>.25?2:1;
+      const cell=document.createElement("button");cell.type="button";cell.className=`heat-cell heat-level-${level}`;cell.title=`${date}: ${money(amount)}`;cell.setAttribute("aria-label",`${date}, ${money(amount)}. Select this date.`);
+      cell.addEventListener("click",()=>{$("reportMonth").value=date.slice(0,7);selectedCalendarDate=date;$("monthFilter").value="";renderAll();$("transactionsTitle").scrollIntoView({behavior:"smooth",block:"start"});});
+      holder.appendChild(cell);
+    }
+  }
+  function renderDateRangeComparison(event){
+    event.preventDefault();
+    const aStart=$("rangeAStart").value,aEnd=$("rangeAEnd").value,bStart=$("rangeBStart").value,bEnd=$("rangeBEnd").value;
+    if(!validDate(aStart)||!validDate(aEnd)||!validDate(bStart)||!validDate(bEnd)||aStart>aEnd||bStart>bEnd){$("dateRangeResults").innerHTML='<p class="range-error">Please enter valid start and end dates for both periods.</p>';return;}
+    const a=expenses.filter(e=>e.date>=aStart&&e.date<=aEnd),b=expenses.filter(e=>e.date>=bStart&&e.date<=bEnd),ta=sum(a),tb=sum(b);
+    const days=(s,e)=>Math.round((new Date(e+"T00:00:00")-new Date(s+"T00:00:00"))/86400000)+1;
+    const delta=tb===0?(ta===0?0:null):(ta-tb)/tb*100;
+    const fmt=(s,e)=>`${new Date(s+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"})} – ${new Date(e+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"})}`;
+    const box=$("dateRangeResults");box.innerHTML=`<div class="range-summary"><article><span>Period A · ${fmt(aStart,aEnd)}</span><strong>${money(ta)}</strong><small>${money(ta/days(aStart,aEnd))} per day · ${a.length} entries</small></article><article><span>Period B · ${fmt(bStart,bEnd)}</span><strong>${money(tb)}</strong><small>${money(tb/days(bStart,bEnd))} per day · ${b.length} entries</small></article><article><span>Difference (A vs B)</span><strong>${delta===null?(ta>0?"New activity":"—"):`${delta>0?"+":""}${delta.toFixed(1)}%`}</strong><small>${money(ta-tb)} total difference</small></article></div><h4>Category differences (A − B)</h4><div class="range-category-list"></div>`;
+    const list=box.querySelector(".range-category-list");
+    categories.forEach(c=>{const av=sum(a.filter(e=>e.category===c.name)),bv=sum(b.filter(e=>e.category===c.name));if(!av&&!bv)return;const row=document.createElement("div");row.className="category-comparison-row";row.innerHTML=`<span>${c.icon} ${escapeHTML(c.name)}</span><span>${money(av)}</span><span class="${av>bv?"change-up":av<bv?"change-down":""}">${av>bv?"+":""}${money(av-bv)}</span>`;list.appendChild(row);});
+    if(!list.children.length)list.innerHTML='<p class="chart-subtitle">No spending in either selected period.</p>';
+  }
   function renderMonthFilter(){
-    const select=$("monthFilter"),current=select.value;const months=[...new Set(expenses.map(e=>e.date.slice(0,7)))].sort().reverse();select.innerHTML='<option value="">All months</option>';months.forEach(m=>select.add(new Option(new Date(`${m}-01T00:00:00`).toLocaleDateString("en-PH",{month:"long",year:"numeric"}),m)));if(months.includes(current))select.value=current;
+    const select=$("monthFilter"),current=select.value;const months=[...new Set([...expenses.map(e=>e.date.slice(0,7)),currentMonth(),selectedMonth()])].sort().reverse();select.innerHTML='<option value="">All months</option>';months.forEach(m=>select.add(new Option(new Date(`${m}-01T00:00:00`).toLocaleDateString("en-PH",{month:"long",year:"numeric"}),m)));if(months.includes(current))select.value=current;
   }
   function renderExpenses(){
     const query=$("searchInput").value.trim().toLocaleLowerCase();const category=$("categoryFilter").value;const month=$("monthFilter").value;const sort=$("sortFilter").value;
@@ -192,6 +384,7 @@
     let rows=expenses.filter(e=>{
       if(category&&e.category!==category)return false;
       if(month&&!e.date.startsWith(month))return false;
+      if(selectedCalendarDate&&e.date!==selectedCalendarDate)return false;
       if(!terms.length)return true;
       const cat=getCategory(e.category);
       const searchable=[e.item,e.notes,e.category,cat.area,cat.icon,e.date,e.date.slice(0,7),e.date.slice(8,10),
@@ -199,7 +392,7 @@
         String(e.price),e.price.toFixed(2),money(e.price),String(Math.round(e.price)),e.id].join(" ").toLocaleLowerCase();
       return terms.every(term=>searchable.includes(term));
     });
-    rows.sort((a,b)=>sort==="date-asc"?a.date.localeCompare(b.date)||a.createdAt.localeCompare(b.createdAt):sort==="price-desc"?b.price-a.price:sort==="price-asc"?a.price-b.price:b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt));
+    rows.sort((a,b)=>sort==="date-asc"?a.date.localeCompare(b.date)||a.createdAt.localeCompare(b.createdAt):sort==="price-desc"?b.price-a.price:sort==="price-asc"?a.price-b.price:sort==="item-asc"?a.item.localeCompare(b.item,undefined,{sensitivity:"base"}):sort==="item-desc"?b.item.localeCompare(a.item,undefined,{sensitivity:"base"}):b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt));
     const tbody=$("expenseRows");tbody.innerHTML="";
     rows.forEach(e=>{
       const c=getCategory(e.category),tr=document.createElement("tr");
@@ -209,8 +402,59 @@
     tbody.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editExpense(b.dataset.edit)));
     tbody.querySelectorAll("[data-delete]").forEach(b=>b.addEventListener("click",()=>askDelete(b.dataset.delete)));
     $("emptyState").classList.toggle("hidden",rows.length>0);
-    $("filteredSummary").textContent=`Showing ${rows.length} of ${expenses.length} ${expenses.length===1?"entry":"entries"}`;$("filteredTotal").textContent=money(sum(rows));
+    const dateNote=selectedCalendarDate?` on ${new Date(selectedCalendarDate+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"})}`:"";
+    $("filteredSummary").textContent=`Showing ${rows.length} of ${expenses.length} ${expenses.length===1?"entry":"entries"}${dateNote}`;$("filteredTotal").textContent=money(sum(rows));
+    $("clearCalendarDate").classList.toggle("hidden",!selectedCalendarDate);
+    $("addOnSelectedDayBtn").classList.toggle("hidden",!selectedCalendarDate);
+    $("calendarSelection").textContent=selectedCalendarDate?`Showing entries for ${new Date(selectedCalendarDate+"T00:00:00").toLocaleDateString("en-PH",{month:"long",day:"numeric",year:"numeric"})}.`:"No day selected.";
   }
+  function renderCalendar(){
+    const grid=$("calendarGrid");grid.innerHTML="";
+    const month=selectedMonth(),[y,m]=month.split("-").map(Number),first=new Date(y,m-1,1),days=new Date(y,m,0).getDate();
+    ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach(day=>{const head=document.createElement("div");head.className="calendar-weekday";head.textContent=day;grid.appendChild(head);});
+    const offset=(first.getDay()+6)%7;for(let i=0;i<offset;i++){const blank=document.createElement("div");blank.className="calendar-day calendar-blank";blank.setAttribute("aria-hidden","true");grid.appendChild(blank);}
+    const totals=Array(days).fill(0),counts=Array(days).fill(0);expenses.forEach(e=>{if(e.date.startsWith(month)){const d=Number(e.date.slice(8,10))-1;if(d>=0&&d<days){totals[d]+=e.price;counts[d]++;}}});
+    for(let d=1;d<=days;d++){
+      const date=`${month}-${String(d).padStart(2,"0")}`,cell=document.createElement("button");cell.type="button";cell.className="calendar-day"+(selectedCalendarDate===date?" is-selected":"")+(counts[d-1]?" has-spending":"");cell.setAttribute("aria-pressed",String(selectedCalendarDate===date));cell.setAttribute("aria-label",`${date}, ${counts[d-1]} expenses, ${money(totals[d-1])}`);
+      const number=document.createElement("span");number.className="calendar-day-number";number.textContent=String(d);cell.appendChild(number);
+      if(counts[d-1]){const amount=document.createElement("span");amount.className="calendar-day-total";amount.textContent=compactMoney(totals[d-1]);cell.appendChild(amount);const count=document.createElement("span");count.className="calendar-day-count";count.textContent=`${counts[d-1]} ${counts[d-1]===1?"entry":"entries"}`;cell.appendChild(count);}
+      cell.addEventListener("click",()=>{selectedCalendarDate=selectedCalendarDate===date?"":date;$("monthFilter").value="";renderAll();});grid.appendChild(cell);
+    }
+  }
+  function compactMoney(amount){return new Intl.NumberFormat("en-PH",{style:"currency",currency:"PHP",notation:"compact",maximumFractionDigits:1}).format(amount);}
+  function renderComparison(){
+    const [y,m]=selectedMonth().split("-").map(Number),prevDate=new Date(y,m-2,1),prevMonth=`${prevDate.getFullYear()}-${String(prevDate.getMonth()+1).padStart(2,"0")}`;
+    const current=expenses.filter(e=>e.date.startsWith(selectedMonth())),previous=expenses.filter(e=>e.date.startsWith(prevMonth));const currentTotal=sum(current),previousTotal=sum(previous);
+    const label=date=>new Date(date+"-01T00:00:00").toLocaleDateString("en-PH",{month:"long",year:"numeric"});
+    $("previousMonthTotal").textContent=money(previousTotal);$("previousMonthLabel").textContent=label(prevMonth);
+    const change=previousTotal===0?(currentTotal===0?0:null):((currentTotal-previousTotal)/previousTotal)*100;
+    $("monthChange").textContent=change===null?(currentTotal>0?"New activity":"—"):`${change>0?"+":""}${change.toFixed(1)}%`;
+    $("monthChange").classList.toggle("change-up",change!==null&&change>0);$("monthChange").classList.toggle("change-down",change!==null&&change<0);
+    $("monthChangeNote").textContent=previousTotal===0?(currentTotal>0?"No spending recorded last month":"No spending in either month"):change>0?"More than the previous month":change<0?"Less than the previous month":"Same total as previous month";
+    $("previousDailyAverage").textContent=money(sum(previous)/new Date(y,m-1,0).getDate());
+    const holder=$("categoryComparison");holder.innerHTML="";
+    categories.forEach(c=>{const now=sum(current.filter(e=>e.category===c.name)),before=sum(previous.filter(e=>e.category===c.name));if(now===0&&before===0)return;const delta=now-before;const row=document.createElement("div");row.className="category-comparison-row";row.innerHTML=`<span>${c.icon} ${escapeHTML(c.name)}</span><span>${money(now)}</span><span class="${delta>0?"change-up":delta<0?"change-down":""}">${delta>0?"+":""}${money(delta)}</span>`;holder.appendChild(row);});
+    if(!holder.children.length)holder.innerHTML='<p class="chart-subtitle">Add expenses to see category changes here.</p>';
+  }
+  function loadCustomViews(){try{const v=JSON.parse(localStorage.getItem("little-garden-saved-views")||"[]");return Array.isArray(v)?v.filter(x=>x&&typeof x.name==="string"&&x.state):[];}catch(e){return[];}}
+  function renderSavedViews(){const select=$("savedViewSelect"),value=select.value;select.innerHTML='<option value="">Choose a view…</option><option value="this-month">This month</option><option value="healthcare">Healthcare</option><option value="largest">Largest expenses</option><option value="all">All records</option>';customViews.forEach((v,i)=>select.add(new Option(`★ ${v.name}`,`custom-${i}`)));if([...select.options].some(o=>o.value===value))select.value=value;}
+  function saveCurrentView(){
+    const name=prompt("Name this saved view (for example, October healthcare):");if(!name||!name.trim())return;
+    const view={name:name.trim().slice(0,40),state:{query:$("searchInput").value,category:$("categoryFilter").value,month:$("monthFilter").value,sort:$("sortFilter").value}};
+    customViews=customViews.filter(v=>v.name.toLocaleLowerCase()!==view.name.toLocaleLowerCase());customViews.push(view);customViews=customViews.slice(-12);
+    try{localStorage.setItem("little-garden-saved-views",JSON.stringify(customViews));renderSavedViews();$("savedViewSelect").value=`custom-${customViews.length-1}`;}catch(e){alert("Could not save this view in browser storage.");}
+  }
+  function applySavedView(){
+    const value=$("savedViewSelect").value;let state=null;
+    if(value.startsWith("custom-"))state=customViews[Number(value.slice(7))]?.state;
+    else if(value==="this-month")state={query:"",category:"",month:currentMonth(),sort:"date-desc"};
+    else if(value==="healthcare")state={query:"Health & care",category:"",month:"",sort:"date-desc"};
+    else if(value==="largest")state={query:"",category:"",month:"",sort:"price-desc"};
+    else if(value==="all")state={query:"",category:"",month:"",sort:"date-desc"};
+    if(!state)return;
+    $("searchInput").value=state.query||"";$("categoryFilter").value=state.category||"";$("monthFilter").value=state.month||"";$("sortFilter").value=state.sort||"date-desc";selectedCalendarDate="";renderAll();
+  }
+  function resetFilters(){ $("searchInput").value="";$("categoryFilter").value="";$("monthFilter").value="";$("sortFilter").value="date-desc";selectedCalendarDate="";$("savedViewSelect").value="";renderAll(); }
   function downloadFile(filename,content,type){
     const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }

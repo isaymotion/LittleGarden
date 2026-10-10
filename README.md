@@ -73,3 +73,18 @@ After changing files, commit and push them to the `main` branch. If a service wo
 - Search supports multiple words (all words must match) across description, notes, category, broader spending area, date in ISO or readable format, day/month, amount (including PHP-formatted amount), and record ID. You can combine search with the category and month filters.
 - Example searches: `groceries`, `2026-10`, `October 10 2026`, `Pets`, `Health & care`, or `250.00`.
 - The footer displays the requested creator attribution and email link.
+
+
+## Spending insights and garden artwork
+
+This build includes clickable category/spending-area pie chart segments and legend items, top 5/10 expenses, a yearly summary, category trends across 12 months, a daily spending heatmap, and comparisons between any two custom date ranges. Clicking a chart item filters the journal to the matching category or spending area for the selected month. Heatmap dates open the corresponding day in the journal.
+
+The welcome banner uses `welcome-banner.jpg`; the install/app icon uses `app-icon.png`. Both are cached for offline use. The icon and banner are included in the project ZIP.
+
+
+## Recurring expense templates and duplicate warnings
+
+- Save the current description, amount, category, and notes as a reusable template. Templates are stored locally in this browser and are separate from recorded expenses.
+- Selecting **Use template** fills the form with today's date; it does not save a transaction. Review the details and submit the form only after the expense has actually been paid.
+- Up to 40 templates can be saved. Templates can be deleted without affecting expense records.
+- When adding or editing an expense, the app checks for an existing record with the same date, amount, and description (ignoring description capitalization and extra spaces). A confirmation lets you cancel or save it anyway. Editing an existing entry does not flag that same entry as a duplicate.

@@ -7,7 +7,7 @@
   <meta name="description" content="A private, offline-friendly monthly expense tracker in Philippine pesos.">
   <title>Little Garden — Expense Tracker</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="icon" href="app-icon.png" type="image/png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -25,18 +25,8 @@
     </header>
 
     <main>
-      <section class="welcome panel">
-        <div>
-          <p class="eyebrow">A LITTLE MORE MINDFUL, EVERY DAY</p>
-          <h1>Keep an eye on<br><em>where it grows.</em></h1>
-          <p class="welcome-copy">A gentle place to record your spending, one small entry at a time.</p>
-        </div>
-        <div class="garden-art" aria-hidden="true">
-          <span class="sun"></span><span class="cloud cloud-one"></span><span class="cloud cloud-two"></span>
-          <span class="hill hill-back"></span><span class="hill hill-front"></span>
-          <span class="flower flower-a">✿</span><span class="flower flower-b">✿</span><span class="flower flower-c">✿</span>
-          <span class="sprout">♧</span>
-        </div>
+      <section class="welcome panel" aria-label="Welcome to Little Garden Expense Tracker">
+        <img class="welcome-banner" src="welcome-banner.jpg" alt="Welcome to Little Garden Expense Tracker, illustrated with a flower garden and church in pixel art">
       </section>
 
       <section class="summary-grid" aria-label="Monthly summary">
@@ -55,6 +45,16 @@
           <strong id="dailyAverage" class="summary-value">₱0.00</strong>
           <span class="summary-note">Based on days elapsed</span>
         </article>
+      </section>
+
+      <section class="panel comparison-panel" aria-labelledby="comparisonTitle">
+        <div class="section-heading"><div><p class="eyebrow">GENTLE MONTHLY REFLECTION</p><h2 id="comparisonTitle">Month-to-month</h2></div><span class="leaf-badge" aria-hidden="true">↗</span></div>
+        <div class="comparison-grid">
+          <article><span class="summary-label">Previous month</span><strong id="previousMonthTotal" class="summary-value">₱0.00</strong><span id="previousMonthLabel" class="summary-note">Previous month</span></article>
+          <article><span class="summary-label">Change in spending</span><strong id="monthChange" class="summary-value">—</strong><span id="monthChangeNote" class="summary-note">Compared with previous month</span></article>
+          <article><span class="summary-label">Previous daily average</span><strong id="previousDailyAverage" class="summary-value">₱0.00</strong><span class="summary-note">Previous month</span></article>
+        </div>
+        <div id="categoryComparison" class="category-comparison" aria-label="Category changes compared with previous month"></div>
       </section>
 
       <section class="content-grid">
@@ -79,14 +79,18 @@
                 <select id="expenseCategory" name="category" required></select>
               </div>
             </div>
-            <label for="expenseNotes">Notes <span class="optional">(optional)</span></label>
-            <textarea id="expenseNotes" name="notes" rows="2" maxlength="500" placeholder="A little context, if useful…"></textarea>
+            <details class="optional-fields"><summary>Optional details <span class="optional">— add notes</span></summary><label for="expenseNotes">Notes <span class="optional">(optional)</span></label><textarea id="expenseNotes" name="notes" rows="2" maxlength="500" placeholder="A little context, if useful…"></textarea></details>
             <div class="form-actions">
               <button id="saveExpenseBtn" class="button button-primary" type="submit">Add expense</button>
               <button id="cancelEditBtn" class="button button-quiet hidden" type="button">Cancel edit</button>
             </div>
             <p id="formMessage" class="form-message" role="status" aria-live="polite"></p>
           </form>
+          <section class="template-tools" aria-labelledby="templateTitle">
+            <div class="template-heading"><div><h3 id="templateTitle">Recurring expense templates</h3><p class="chart-subtitle">Reusable details for expenses you expect to pay. Nothing is recorded until you confirm it.</p></div></div>
+            <div class="template-save-row"><button id="saveTemplateBtn" class="button button-outline" type="button">Save current details as template</button></div>
+            <div id="templateList" class="template-list"><p class="empty-state">No templates yet. Fill in an expense and save it as a template.</p></div>
+          </section>
         </section>
 
         <section class="panel report-panel" aria-labelledby="reportTitle">
@@ -117,10 +121,58 @@
         </section>
       </section>
 
+      <section class="panel insights-panel" aria-labelledby="insightsTitle">
+        <div class="section-heading"><div><p class="eyebrow">PATTERNS, NOT PRESSURE</p><h2 id="insightsTitle">Spending insights</h2></div><span class="leaf-badge" aria-hidden="true">✧</span></div>
+        <div class="insights-grid">
+          <article class="chart-card insight-card">
+            <div class="insight-heading"><div><h3>Top expenses</h3><p class="chart-subtitle">Largest entries in the selected month</p></div><label class="compact-select-label">Show <select id="topExpenseLimit" aria-label="Number of top expenses"><option value="5">Top 5</option><option value="10">Top 10</option></select></label></div>
+            <div id="topExpensesList" class="top-expenses-list"></div>
+          </article>
+          <article class="chart-card insight-card">
+            <div class="insight-heading"><div><h3>Yearly summary</h3><p class="chart-subtitle">A wider view of your spending</p></div><label class="compact-select-label">Year <select id="yearSummaryYear" aria-label="Year for summary"></select></label></div>
+            <div class="year-summary-grid"><div><span class="summary-label">Total spent</span><strong id="yearTotal" class="summary-value">₱0.00</strong></div><div><span class="summary-label">Monthly average</span><strong id="yearMonthlyAverage" class="summary-value">₱0.00</strong></div><div><span class="summary-label">Entries</span><strong id="yearEntryCount" class="summary-value">0</strong></div></div>
+            <p id="yearTopCategory" class="year-top-category">Add entries to see your highest-spending category.</p>
+          </article>
+        </div>
+        <article class="chart-card trend-card">
+          <div class="insight-heading"><div><h3>Spending trends</h3><p class="chart-subtitle">Monthly totals for each category across the selected year</p></div><label class="compact-select-label">Year <select id="trendYear" aria-label="Year for spending trends"></select></label></div>
+          <div id="spendingTrends" class="trend-chart" role="img" aria-label="Line chart showing monthly spending trends by category"></div>
+          <div id="trendLegend" class="trend-legend"></div>
+        </article>
+        <article class="chart-card heatmap-card">
+          <div class="insight-heading"><div><h3>Daily spending heatmap</h3><p class="chart-subtitle">Darker squares indicate higher spending days, relative to this year</p></div><label class="compact-select-label">Year <select id="heatmapYear" aria-label="Year for daily heatmap"></select></label></div>
+          <div id="spendingHeatmap" class="spending-heatmap" aria-label="Daily spending heatmap"></div>
+          <div class="heatmap-key"><span>Less</span><i class="heat-level-0"></i><i class="heat-level-1"></i><i class="heat-level-2"></i><i class="heat-level-3"></i><i class="heat-level-4"></i><span>More</span></div>
+        </article>
+        <article class="chart-card date-range-card">
+          <div><h3>Compare any two periods</h3><p class="chart-subtitle">Choose custom date ranges, including partial months or different-length periods.</p></div>
+          <form id="dateRangeForm" class="date-range-form">
+            <fieldset><legend>Period A</legend><label for="rangeAStart">From</label><input id="rangeAStart" type="date" required><label for="rangeAEnd">To</label><input id="rangeAEnd" type="date" required></fieldset>
+            <fieldset><legend>Period B</legend><label for="rangeBStart">From</label><input id="rangeBStart" type="date" required><label for="rangeBEnd">To</label><input id="rangeBEnd" type="date" required></fieldset>
+            <button class="button button-primary" type="submit">Compare periods</button>
+          </form>
+          <div id="dateRangeResults" class="date-range-results" aria-live="polite"><p class="chart-subtitle">Choose two periods and compare their totals, daily averages, and category changes.</p></div>
+        </article>
+        <p class="chart-subtitle insight-footnote">Tip: tap a category or spending-area segment in either pie chart to open its matching transactions.</p>
+      </section>
+
+      <section class="panel calendar-panel" aria-labelledby="calendarTitle">
+        <div class="section-heading"><div><p class="eyebrow">YOUR MONTH IN LITTLE MOMENTS</p><h2 id="calendarTitle">Spending calendar</h2></div><div class="calendar-actions"><button id="addOnSelectedDayBtn" class="button button-primary hidden" type="button">Add expense on this day</button><button id="clearCalendarDate" class="button button-quiet hidden" type="button">Clear selected day</button></div></div>
+        <p class="calendar-hint">Choose a day to see its expenses in the journal. Amounts appear on days with recorded spending.</p>
+        <div id="calendarGrid" class="calendar-grid" aria-label="Monthly spending calendar"></div>
+        <p id="calendarSelection" class="calendar-selection" role="status" aria-live="polite">No day selected.</p>
+      </section>
+
       <section class="panel transactions-panel" aria-labelledby="transactionsTitle">
         <div class="section-heading transaction-heading">
           <div><p class="eyebrow">YOUR RECORDS</p><h2 id="transactionsTitle">Expense journal</h2></div>
           <span id="allCount" class="count-pill">0 entries</span>
+        </div>
+        <div class="saved-views-row">
+          <label for="savedViewSelect">Saved views</label>
+          <select id="savedViewSelect" aria-label="Apply a saved view"><option value="">Choose a view…</option><option value="this-month">This month</option><option value="healthcare">Healthcare</option><option value="largest">Largest expenses</option><option value="all">All records</option></select>
+          <button id="saveViewBtn" class="button button-outline" type="button">Save current view</button>
+          <button id="resetFiltersBtn" class="button button-quiet" type="button">Reset filters</button>
         </div>
         <div class="toolbar">
           <div class="search-box"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" placeholder="Search description, date, category, notes, price…" aria-label="Search expenses by description, date, category, notes, price, or spending area"></div>
@@ -128,7 +180,7 @@
           <select id="monthFilter" aria-label="Filter by month"><option value="">All months</option></select>
           <select id="sortFilter" aria-label="Sort expenses">
             <option value="date-desc">Newest first</option><option value="date-asc">Oldest first</option>
-            <option value="price-desc">Highest price</option><option value="price-asc">Lowest price</option>
+            <option value="price-desc">Highest price</option><option value="price-asc">Lowest price</option><option value="item-asc">Description A–Z</option><option value="item-desc">Description Z–A</option>
           </select>
         </div>
         <div class="table-wrap">
@@ -153,7 +205,51 @@
       <footer class="app-footer"><span>Made for mindful money moments <span aria-hidden="true">✿</span></span><span>PHP · Local storage · Offline-friendly</span><span class="attribution">App created by Isabella Navarro, MD. Latest version October 2026. <a href="mailto:isaymotion@gmail.com">isaymotion@gmail.com</a></span></footer>
     </main>
   </div>
-  <dialog id="confirmDialog" class="confirm-dialog"><form method="dialog"><h2>Delete this expense?</h2><p>This entry will be removed from this browser. Export a backup first if you might need it later.</p><div class="dialog-actions"><button class="button button-quiet" value="cancel">Keep it</button><button id="confirmDeleteBtn" class="button button-danger" value="confirm">Delete expense</button></div></form></dialog>
+  <div id="undoToast" class="undo-toast" role="status" aria-live="polite" hidden><span id="undoMessage">Expense deleted.</span><button id="undoDeleteBtn" class="button button-outline" type="button">Undo</button></div>
   <script src="app.js"></script>
 </body>
 </html>
+
+/* iPhone/mobile overflow hardening */
+html, body { width:100%; max-width:100%; overflow-x:clip; }
+.app-shell, main, .panel, .topbar, .content-grid, .entry-panel, .transactions-panel,
+.insights-panel, .insights-grid, .chart-grid, .summary-grid, .summary-card,
+.section-heading, .toolbar, .field-row, .form-actions, .tool-buttons,
+.date-range-card, .trend-card, .heatmap-card, .insight-card { min-width:0; }
+.app-shell { width:100%; }
+.topbar { flex-wrap:wrap; }
+.brand { min-width:0; flex:1 1 180px; }
+.brand > span:last-child { min-width:0; }
+.top-actions { min-width:0; max-width:100%; flex-wrap:wrap; justify-content:flex-end; }
+.welcome-banner { max-width:100%; }
+input, select, textarea, button { max-width:100%; }
+img, svg, canvas { max-width:100%; }
+.summary-grid > *, .content-grid > *, .insights-grid > *, .chart-grid > * { min-width:0; }
+.date-range-form > *, .range-summary > *, .year-summary-grid > * { min-width:0; }
+.trend-chart { max-width:100%; }
+.table-wrap { max-width:100%; }
+@media (max-width: 700px) {
+  .topbar { align-items:flex-start; }
+  .brand { flex:1 1 100%; }
+  .top-actions { width:100%; justify-content:flex-start; }
+  .top-actions .button { flex:0 1 auto; white-space:normal; }
+  .summary-grid { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+  .summary-card { overflow-wrap:anywhere; }
+  .welcome { width:100%; }
+  .welcome-banner { width:100%; height:auto; max-height:none; object-fit:contain; }
+  .entry-panel form { min-width:0; }
+  .field-row > * { min-width:0; }
+  .insight-heading { min-width:0; }
+  .date-range-form input { min-width:0; }
+}
+@media (max-width: 390px) {
+  .app-shell { padding-left:10px; padding-right:10px; }
+  .panel { padding:15px; }
+  .top-actions { gap:6px; }
+  .top-actions .button { font-size:.7rem; padding:7px 9px; }
+  .summary-grid { grid-template-columns:minmax(0,1fr); }
+  .summary-card:last-child { grid-column:auto; }
+  .year-summary-grid { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+  .range-summary { grid-template-columns:minmax(0,1fr); }
+  .comparison-grid { grid-template-columns:minmax(0,1fr); }
+}
