@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#315b43">
+  <meta name="description" content="A private, offline-friendly monthly expense tracker in Philippine pesos.">
+  <title>Little Garden — Expense Tracker</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Little Garden home">
+        <span class="brand-mark" aria-hidden="true">❀</span>
+        <span><strong>Little Garden</strong><small>Monthly expense journal</small></span>
+      </a>
+      <div class="top-actions">
+        <button id="installBtn" class="button button-quiet hidden" type="button">Install app</button>
+        <button id="exportJsonBtn" class="button button-outline" type="button">Backup</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="welcome panel">
+        <div>
+          <p class="eyebrow">A LITTLE MORE MINDFUL, EVERY DAY</p>
+          <h1>Keep an eye on<br><em>where it grows.</em></h1>
+          <p class="welcome-copy">A gentle place to record your spending, one small entry at a time.</p>
+        </div>
+        <div class="garden-art" aria-hidden="true">
+          <span class="sun"></span><span class="cloud cloud-one"></span><span class="cloud cloud-two"></span>
+          <span class="hill hill-back"></span><span class="hill hill-front"></span>
+          <span class="flower flower-a">✿</span><span class="flower flower-b">✿</span><span class="flower flower-c">✿</span>
+          <span class="sprout">♧</span>
+        </div>
+      </section>
+
+      <section class="summary-grid" aria-label="Monthly summary">
+        <article class="summary-card total-card">
+          <span class="summary-label">Spent this month</span>
+          <strong id="monthTotal" class="summary-value">₱0.00</strong>
+          <span id="monthLabel" class="summary-note">Current month</span>
+        </article>
+        <article class="summary-card">
+          <span class="summary-label">Entries this month</span>
+          <strong id="monthCount" class="summary-value">0</strong>
+          <span class="summary-note">Little steps add up</span>
+        </article>
+        <article class="summary-card">
+          <span class="summary-label">Daily average</span>
+          <strong id="dailyAverage" class="summary-value">₱0.00</strong>
+          <span class="summary-note">Based on days elapsed</span>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <section class="panel entry-panel" aria-labelledby="entryTitle">
+          <div class="section-heading">
+            <div><p class="eyebrow">ADD TO YOUR JOURNAL</p><h2 id="entryTitle">New expense</h2></div>
+            <span class="leaf-badge" aria-hidden="true">✦</span>
+          </div>
+          <form id="expenseForm">
+            <input id="expenseId" type="hidden">
+            <label for="expenseDate">Date</label>
+            <input id="expenseDate" name="date" type="date" required>
+            <label for="expenseItem">Item or description</label>
+            <input id="expenseItem" name="item" type="text" maxlength="120" placeholder="e.g. Weekend groceries" required>
+            <div class="field-row">
+              <div class="field-grow">
+                <label for="expensePrice">Price (PHP)</label>
+                <div class="price-input"><span>₱</span><input id="expensePrice" name="price" type="number" min="0.01" max="999999999" step="0.01" inputmode="decimal" placeholder="0.00" required></div>
+              </div>
+              <div class="field-grow">
+                <label for="expenseCategory">Category</label>
+                <select id="expenseCategory" name="category" required></select>
+              </div>
+            </div>
+            <label for="expenseNotes">Notes <span class="optional">(optional)</span></label>
+            <textarea id="expenseNotes" name="notes" rows="2" maxlength="500" placeholder="A little context, if useful…"></textarea>
+            <div class="form-actions">
+              <button id="saveExpenseBtn" class="button button-primary" type="submit">Add expense</button>
+              <button id="cancelEditBtn" class="button button-quiet hidden" type="button">Cancel edit</button>
+            </div>
+            <p id="formMessage" class="form-message" role="status" aria-live="polite"></p>
+          </form>
+        </section>
+
+        <section class="panel report-panel" aria-labelledby="reportTitle">
+          <div class="section-heading report-heading">
+            <div><p class="eyebrow">YOUR SPENDING, AT A GLANCE</p><h2 id="reportTitle">Monthly garden</h2></div>
+            <label class="month-picker-label" for="reportMonth">Month
+              <input id="reportMonth" type="month">
+            </label>
+          </div>
+          <div class="chart-grid">
+            <article class="chart-card">
+              <h3>By category</h3>
+              <p class="chart-subtitle">All 12 categories</p>
+              <div id="categoryChart" class="chart-wrap" role="img" aria-label="Pie chart of spending by category"></div>
+              <div id="categoryLegend" class="legend"></div>
+            </article>
+            <article class="chart-card">
+              <h3>By spending area</h3>
+              <p class="chart-subtitle">Four broader areas</p>
+              <div id="areaChart" class="chart-wrap" role="img" aria-label="Pie chart of spending by broader area"></div>
+              <div id="areaLegend" class="legend"></div>
+            </article>
+          </div>
+          <article class="chart-card bar-card">
+            <div><h3>Daily spending</h3><p class="chart-subtitle">Daily totals for the selected month</p></div>
+            <div id="dailyChart" class="bar-chart" role="img" aria-label="Bar chart of daily spending"></div>
+          </article>
+        </section>
+      </section>
+
+      <section class="panel transactions-panel" aria-labelledby="transactionsTitle">
+        <div class="section-heading transaction-heading">
+          <div><p class="eyebrow">YOUR RECORDS</p><h2 id="transactionsTitle">Expense journal</h2></div>
+          <span id="allCount" class="count-pill">0 entries</span>
+        </div>
+        <div class="toolbar">
+          <div class="search-box"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" placeholder="Search item, notes, or category…" aria-label="Search expenses"></div>
+          <select id="categoryFilter" aria-label="Filter by category"><option value="">All categories</option></select>
+          <select id="monthFilter" aria-label="Filter by month"><option value="">All months</option></select>
+          <select id="sortFilter" aria-label="Sort expenses">
+            <option value="date-desc">Newest first</option><option value="date-asc">Oldest first</option>
+            <option value="price-desc">Highest price</option><option value="price-asc">Lowest price</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Item</th><th>Category</th><th class="amount-col">Price</th><th class="actions-col">Actions</th></tr></thead>
+            <tbody id="expenseRows"></tbody>
+          </table>
+          <div id="emptyState" class="empty-state"><span aria-hidden="true">🌱</span><h3>No expenses here yet</h3><p>Add your first expense, or adjust your search and filters.</p></div>
+        </div>
+        <div class="table-footer"><span id="filteredSummary">Showing 0 entries</span><strong id="filteredTotal">₱0.00</strong></div>
+      </section>
+
+      <section class="panel tools-panel">
+        <div class="section-heading"><div><p class="eyebrow">YOUR DATA, YOURS TO KEEP</p><h2>Garden tools</h2></div></div>
+        <div class="tools-grid">
+          <div class="tool-item"><span class="tool-icon">↗</span><div><h3>Export records</h3><p>Save a full JSON backup or a spreadsheet-friendly CSV file.</p><div class="tool-buttons"><button id="exportCsvBtn" class="button button-outline" type="button">Export CSV</button><button id="exportJsonBtn2" class="button button-outline" type="button">Export JSON</button></div></div></div>
+          <div class="tool-item"><span class="tool-icon">↙</span><div><h3>Restore a backup</h3><p>Import a JSON backup or CSV. You can replace records or merge them.</p><div class="tool-buttons"><label class="button button-outline file-button" for="importFile">Choose file</label><input id="importFile" type="file" accept=".json,.csv,application/json,text/csv" hidden><select id="importMode" aria-label="Import mode"><option value="merge">Merge with current records</option><option value="replace">Replace all records</option></select></div><p id="importMessage" class="form-message" role="status" aria-live="polite"></p></div></div>
+          <div class="tool-item"><span class="tool-icon">♡</span><div><h3>Private by design</h3><p>Your entries stay in this browser using local storage. No account or server is required. Export backups regularly, especially before clearing browser data.</p></div></div>
+          <div class="tool-item"><span class="tool-icon">☼</span><div><h3>Daily rhythm</h3><p>Use the date field to log expenses as you go. Your daily chart and monthly summary update automatically.</p></div></div>
+        </div>
+      </section>
+      <footer><span>Made for mindful money moments <span aria-hidden="true">✿</span></span><span>PHP · Local storage · Offline-friendly</span></footer>
+    </main>
+  </div>
+  <dialog id="confirmDialog" class="confirm-dialog"><form method="dialog"><h2>Delete this expense?</h2><p>This entry will be removed from this browser. Export a backup first if you might need it later.</p><div class="dialog-actions"><button class="button button-quiet" value="cancel">Keep it</button><button id="confirmDeleteBtn" class="button button-danger" value="confirm">Delete expense</button></div></form></dialog>
+  <script src="app.js"></script>
+</body>
+</html>

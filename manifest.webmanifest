@@ -1,0 +1,18 @@
+{
+  "name": "Little Garden \u2014 Expense Tracker",
+  "short_name": "Little Garden",
+  "description": "A private, offline-friendly expense tracker in Philippine pesos.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fbf8ef",
+  "theme_color": "#315b43",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
