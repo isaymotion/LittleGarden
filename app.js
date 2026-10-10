@@ -72,9 +72,27 @@
       $("expenseCategory").add(new Option(`${c.icon} ${c.name}`,c.name));
       $("categoryFilter").add(new Option(c.name,c.name));
     });
+    initTheme();
     bindEvents();
     renderAll();
     if("serviceWorker" in navigator && location.protocol!=="file:") navigator.serviceWorker.register("./sw.js").catch(err=>console.warn("Offline cache unavailable",err));
+  }
+  function initTheme(){
+    let theme="light";
+    try { theme=localStorage.getItem("little-garden-theme") || "light"; } catch(e) {}
+    applyTheme(theme);
+    $("themeToggle").addEventListener("click",()=>{
+      const next=document.documentElement.dataset.theme==="dark"?"light":"dark";
+      applyTheme(next);
+      try { localStorage.setItem("little-garden-theme",next); } catch(e) {}
+    });
+  }
+  function applyTheme(theme){
+    document.documentElement.dataset.theme=theme;
+    const dark=theme==="dark";
+    $("themeToggle").textContent=dark?"☀️ Light mode":"🌙 Dark mode";
+    $("themeToggle").setAttribute("aria-label",dark?"Switch to light mode":"Switch to dark mode");
+    document.querySelector('meta[name="theme-color"]').setAttribute("content",dark?"#17251d":"#315b43");
   }
   function bindEvents(){
     $("expenseForm").addEventListener("submit",onSave);
@@ -170,7 +188,17 @@
   }
   function renderExpenses(){
     const query=$("searchInput").value.trim().toLocaleLowerCase();const category=$("categoryFilter").value;const month=$("monthFilter").value;const sort=$("sortFilter").value;
-    let rows=expenses.filter(e=>(!category||e.category===category)&&(!month||e.date.startsWith(month))&&(!query||[e.item,e.notes,e.category,e.date].some(v=>v.toLocaleLowerCase().includes(query))));
+    const terms=query.split(/\s+/).filter(Boolean);
+    let rows=expenses.filter(e=>{
+      if(category&&e.category!==category)return false;
+      if(month&&!e.date.startsWith(month))return false;
+      if(!terms.length)return true;
+      const cat=getCategory(e.category);
+      const searchable=[e.item,e.notes,e.category,cat.area,cat.icon,e.date,e.date.slice(0,7),e.date.slice(8,10),
+        new Date(e.date+"T00:00:00").toLocaleDateString("en-PH",{month:"long",day:"numeric",year:"numeric"}),
+        String(e.price),e.price.toFixed(2),money(e.price),String(Math.round(e.price)),e.id].join(" ").toLocaleLowerCase();
+      return terms.every(term=>searchable.includes(term));
+    });
     rows.sort((a,b)=>sort==="date-asc"?a.date.localeCompare(b.date)||a.createdAt.localeCompare(b.createdAt):sort==="price-desc"?b.price-a.price:sort==="price-asc"?a.price-b.price:b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt));
     const tbody=$("expenseRows");tbody.innerHTML="";
     rows.forEach(e=>{

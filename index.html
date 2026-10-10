@@ -18,6 +18,7 @@
         <span><strong>Little Garden</strong><small>Monthly expense journal</small></span>
       </a>
       <div class="top-actions">
+        <button id="themeToggle" class="button button-outline" type="button" aria-label="Switch to dark mode" title="Switch theme">🌙 Dark mode</button>
         <button id="installBtn" class="button button-quiet hidden" type="button">Install app</button>
         <button id="exportJsonBtn" class="button button-outline" type="button">Backup</button>
       </div>
@@ -122,7 +123,7 @@
           <span id="allCount" class="count-pill">0 entries</span>
         </div>
         <div class="toolbar">
-          <div class="search-box"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" placeholder="Search item, notes, or category…" aria-label="Search expenses"></div>
+          <div class="search-box"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" placeholder="Search description, date, category, notes, price…" aria-label="Search expenses by description, date, category, notes, price, or spending area"></div>
           <select id="categoryFilter" aria-label="Filter by category"><option value="">All categories</option></select>
           <select id="monthFilter" aria-label="Filter by month"><option value="">All months</option></select>
           <select id="sortFilter" aria-label="Sort expenses">
@@ -149,7 +150,7 @@
           <div class="tool-item"><span class="tool-icon">☼</span><div><h3>Daily rhythm</h3><p>Use the date field to log expenses as you go. Your daily chart and monthly summary update automatically.</p></div></div>
         </div>
       </section>
-      <footer><span>Made for mindful money moments <span aria-hidden="true">✿</span></span><span>PHP · Local storage · Offline-friendly</span></footer>
+      <footer class="app-footer"><span>Made for mindful money moments <span aria-hidden="true">✿</span></span><span>PHP · Local storage · Offline-friendly</span><span class="attribution">App created by Isabella Navarro, MD. Latest version October 2026. <a href="mailto:isaymotion@gmail.com">isaymotion@gmail.com</a></span></footer>
     </main>
   </div>
   <dialog id="confirmDialog" class="confirm-dialog"><form method="dialog"><h2>Delete this expense?</h2><p>This entry will be removed from this browser. Export a backup first if you might need it later.</p><div class="dialog-actions"><button class="button button-quiet" value="cancel">Keep it</button><button id="confirmDeleteBtn" class="button button-danger" value="confirm">Delete expense</button></div></form></dialog>

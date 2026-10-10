@@ -66,3 +66,10 @@ If you deploy to a project site (a repository other than `YOUR-USERNAME.github.i
 ## Updating the app
 
 After changing files, commit and push them to the `main` branch. If a service worker cache makes an older version appear, bump `CACHE_NAME` in `sw.js` (for example, `little-garden-v2`) so clients install the new shell.
+
+## Dark mode and search
+
+- Use the **Dark mode / Light mode** button in the header. The chosen theme is saved locally in this browser and does not change expense data.
+- Search supports multiple words (all words must match) across description, notes, category, broader spending area, date in ISO or readable format, day/month, amount (including PHP-formatted amount), and record ID. You can combine search with the category and month filters.
+- Example searches: `groceries`, `2026-10`, `October 10 2026`, `Pets`, `Health & care`, or `250.00`.
+- The footer displays the requested creator attribution and email link.
