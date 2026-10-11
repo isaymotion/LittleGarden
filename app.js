@@ -1,7 +1,6 @@
 (() => {
   "use strict";
   const STORAGE_KEY = "little-garden-expenses-v1";
-  const TEMPLATE_STORAGE_KEY = "little-garden-expense-templates-v1";
   const categories = [
     {name:"Groceries", icon:"🥬", area:"Daily living", color:"#80a878"},
     {name:"Restaurants & Dining", icon:"🍲", area:"Daily living", color:"#e7b66c"},
@@ -35,7 +34,6 @@
   let undoEntry = null;
   let undoTimer = null;
   let customViews = loadCustomViews();
-  let expenseTemplates = loadExpenseTemplates();
 
   function validDate(s){ return typeof s==="string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s+"T00:00:00")); }
   function normalizeExpense(raw, index=0) {
@@ -105,13 +103,6 @@
   function bindEvents(){
     $("expenseForm").addEventListener("submit",onSave);
     $("cancelEditBtn").addEventListener("click",resetForm);
-    $("saveTemplateBtn").addEventListener("click",saveCurrentAsTemplate);
-    $("templateList").addEventListener("click",event=>{
-      const use=event.target.closest("[data-use-template]");
-      const remove=event.target.closest("[data-delete-template]");
-      if(use) applyExpenseTemplate(use.dataset.useTemplate);
-      if(remove) deleteExpenseTemplate(remove.dataset.deleteTemplate);
-    });
     ["searchInput","categoryFilter","monthFilter","sortFilter"].forEach(id=>$(id).addEventListener(id==="searchInput"?"input":"change",renderExpenses));
     $("reportMonth").addEventListener("change",()=>{selectedCalendarDate="";$("clearCalendarDate").classList.add("hidden");renderAll();});
     ["topExpenseLimit","yearSummaryYear","trendYear","heatmapYear"].forEach(id=>$(id).addEventListener("change",renderInsights));
@@ -137,7 +128,6 @@
     $("undoDeleteBtn").addEventListener("click",undoDelete);
     $("exportJsonBtn").addEventListener("click",exportJSON);
     $("exportJsonBtn2").addEventListener("click",exportJSON);
-    $("transferExportBtn").addEventListener("click",exportTransferPackage);
     $("exportCsvBtn").addEventListener("click",exportCSV);
     $("importFile").addEventListener("change",importFile);
 
@@ -151,11 +141,6 @@
     const raw={id:id||makeId(),date:$("expenseDate").value,item:$("expenseItem").value,price:$("expensePrice").value,category:$("expenseCategory").value,notes:$("expenseNotes").value};
     let entry;
     try{entry=normalizeExpense(raw);}catch(e){$("formMessage").textContent=e.message;return;}
-    const duplicate=expenses.find(e=>e.id!==id && e.date===entry.date && Math.round(e.price*100)===Math.round(entry.price*100) && normalizeDescription(e.item)===normalizeDescription(entry.item));
-    if(duplicate){
-      const message=`A similar expense already exists on ${duplicate.date}: “${duplicate.item}” (${money(duplicate.price)}).\n\nSave this as a separate entry anyway?`;
-      if(!window.confirm(message)) return;
-    }
     if(id){const old=expenses.find(e=>e.id===id);entry.createdAt=old?.createdAt||entry.createdAt;expenses=expenses.map(e=>e.id===id?entry:e);}
     else expenses.push(entry);
     try { localStorage.setItem("little-garden-last-category",entry.category); } catch(e) {}
@@ -193,64 +178,7 @@
     expenses.splice(Math.min(undoEntry.index,expenses.length),0,undoEntry.entry);
     if(saveExpenses()){renderAll();$("undoToast").hidden=true;if(undoTimer)clearTimeout(undoTimer);undoTimer=null;undoEntry=null;}
   }
-  function normalizeDescription(value){return String(value||"").trim().toLocaleLowerCase().replace(/\s+/g," ");}
-  function loadExpenseTemplates(){
-    try{
-      const raw=JSON.parse(localStorage.getItem(TEMPLATE_STORAGE_KEY)||"[]");
-      if(!Array.isArray(raw))return [];
-      return raw.filter(t=>t&&typeof t==="object"&&String(t.name||"").trim()&&String(t.item||"").trim()&&categoryNames.includes(t.category))
-        .map(t=>({id:String(t.id||makeId()),name:String(t.name).slice(0,60),item:String(t.item).slice(0,120),price:Number(t.price)||0,category:t.category,notes:String(t.notes||"").slice(0,500)}));
-    }catch(e){return [];}
-  }
-  function saveExpenseTemplates(){
-    try{localStorage.setItem(TEMPLATE_STORAGE_KEY,JSON.stringify(expenseTemplates));return true;}
-    catch(e){alert("Could not save templates in this browser. Try removing a few templates or checking browser storage settings.");return false;}
-  }
-  function saveCurrentAsTemplate(){
-    const item=$("expenseItem").value.trim();
-    const price=Number($("expensePrice").value);
-    const category=$("expenseCategory").value;
-    if(!item||!Number.isFinite(price)||price<=0||!categoryNames.includes(category)){
-      $("formMessage").textContent="Enter a description, valid amount, and category first, then save the details as a template.";
-      $("expenseItem").focus();return;
-    }
-    if(expenseTemplates.length>=40){alert("You can keep up to 40 templates. Delete an old template to add another.");return;}
-    const suggested=item.length>34?item.slice(0,34).trim():item;
-    const name=window.prompt("Name this reusable template:",suggested);
-    if(name===null)return;
-    const cleanName=name.trim().slice(0,60);
-    if(!cleanName){alert("Please give the template a name.");return;}
-    expenseTemplates.push({id:makeId(),name:cleanName,item,price:Math.round(price*100)/100,category,notes:$ ("expenseNotes").value.trim().slice(0,500)});
-    if(saveExpenseTemplates()){
-      renderExpenseTemplates();
-      $("formMessage").textContent=`Template “${cleanName}” saved. It will not create an expense until you submit the form.`;
-    }
-  }
-  function applyExpenseTemplate(id){
-    const template=expenseTemplates.find(t=>t.id===id);if(!template)return;
-    resetForm();
-    $("expenseDate").value=localDate();
-    $("expenseItem").value=template.item;
-    $("expensePrice").value=template.price||"";
-    $("expenseCategory").value=template.category;
-    $("expenseNotes").value=template.notes;
-    $("formMessage").textContent=`“${template.name}” loaded. Check the details and submit only after you have paid this expense.`;
-    $("entryTitle").textContent="Confirm expense from template";
-    $("expenseItem").focus();
-    document.querySelector(".entry-panel").scrollIntoView({behavior:"smooth",block:"start"});
-  }
-  function deleteExpenseTemplate(id){
-    const template=expenseTemplates.find(t=>t.id===id);if(!template)return;
-    if(!window.confirm(`Delete the template “${template.name}”? This will not affect recorded expenses.`))return;
-    expenseTemplates=expenseTemplates.filter(t=>t.id!==id);
-    if(saveExpenseTemplates())renderExpenseTemplates();
-  }
-  function renderExpenseTemplates(){
-    const host=$("templateList");if(!host)return;
-    if(!expenseTemplates.length){host.innerHTML='<p class="empty-state">No templates yet. Fill in an expense and save it as a template.</p>';return;}
-    host.innerHTML=expenseTemplates.map(t=>`<article class="template-card"><div class="template-card-main"><span class="template-card-title">${escapeHTML(t.name)}</span><span class="template-card-meta">${escapeHTML(t.item)} · ${money(t.price)} · ${escapeHTML(t.category)}</span></div><div class="template-card-actions"><button class="button button-primary" type="button" data-use-template="${escapeHTML(t.id)}">Use template</button><button class="button button-quiet" type="button" data-delete-template="${escapeHTML(t.id)}" aria-label="Delete template ${escapeHTML(t.name)}">Delete</button></div></article>`).join("");
-  }
-  function renderAll(){renderSummary();renderReports();renderMonthFilter();renderExpenses();renderCalendar();renderComparison();renderSavedViews();renderInsights();renderExpenseTemplates();$("allCount").textContent=`${expenses.length} ${expenses.length===1?"entry":"entries"}`;}
+  function renderAll(){renderSummary();renderReports();renderMonthFilter();renderExpenses();renderCalendar();renderComparison();renderSavedViews();renderInsights();$("allCount").textContent=`${expenses.length} ${expenses.length===1?"entry":"entries"}`;}
   function selectedMonth(){return $("reportMonth").value||currentMonth();}
   function renderSummary(){
     const month=selectedMonth();const rows=expenses.filter(e=>e.date.startsWith(month));const [y,m]=month.split("-").map(Number);
@@ -317,7 +245,6 @@
     $("rangeBStart").value=`${priorYear}-${priorMonthNum}-01`;$("rangeBEnd").value=`${priorYear}-${priorMonthNum}-${matchingDay}`;
   }
   function renderInsights(){
-    renderPersonalInsights();
     const month=selectedMonth(),monthRows=expenses.filter(e=>e.date.startsWith(month));
     const limit=Number($("topExpenseLimit").value)||5;
     const top=$("topExpensesList");top.innerHTML="";
@@ -333,26 +260,6 @@
     const catTotals=categories.map(c=>({name:c.name,icon:c.icon,total:sum(yearRows.filter(e=>e.category===c.name))})).sort((a,b)=>b.total-a.total);
     $("yearTopCategory").textContent=catTotals[0]?.total?`Highest category: ${catTotals[0].icon} ${catTotals[0].name} (${money(catTotals[0].total)})`:"Add entries to see your highest-spending category.";
     renderTrendChart($("trendYear").value||year);renderHeatmap($("heatmapYear").value||year);
-  }
-  function renderPersonalInsights(){
-    const host=$("personalInsightsList");
-    const today=localDate(),month=currentMonth(),year=today.slice(0,4);
-    const currentRows=expenses.filter(e=>e.date.startsWith(month));
-    const previousDate=new Date(Number(today.slice(0,4)),Number(today.slice(5,7))-2,1);
-    const previousMonth=`${previousDate.getFullYear()}-${String(previousDate.getMonth()+1).padStart(2,"0")}`;
-    const observations=[];
-    const days=new Set(currentRows.map(e=>e.date));
-    observations.push({icon:"🌱",text:currentRows.length?`You recorded expenses on ${days.size} ${days.size===1?"day":"days"} this month.`:"No expenses have been recorded this month yet."});
-    const categoryCounts=categories.map(c=>({category:c,count:currentRows.filter(e=>e.category===c.name).length,total:sum(currentRows.filter(e=>e.category===c.name))})).filter(x=>x.count>0).sort((a,b)=>b.count-a.count||b.total-a.total);
-    if(categoryCounts.length){const leaders=categoryCounts.filter(x=>x.count===categoryCounts[0].count);const names=leaders.map(x=>`${x.category.icon} ${x.category.name}`).join(", ");observations.push({icon:"🌷",text:`Most frequently recorded this month: ${names} (${categoryCounts[0].count} ${categoryCounts[0].count===1?"entry":"entries"}).`});}
-    const currentTotals=categories.map(c=>({category:c,total:sum(expenses.filter(e=>e.date.startsWith(month)&&e.category===c.name)),previous:sum(expenses.filter(e=>e.date.startsWith(previousMonth)&&e.category===c.name))}));
-    const increases=currentTotals.filter(x=>x.total>x.previous).sort((a,b)=>(b.total-b.previous)-(a.total-a.previous));
-    if(increases.length){const item=increases[0],delta=item.total-item.previous;observations.push({icon:"🍃",text:`${item.category.name} spending was ${money(delta)} higher than ${previousDate.toLocaleDateString("en-PH",{month:"long",year:"numeric"})}.`});}
-    else if(currentRows.length){observations.push({icon:"🍃",text:"No category is currently higher than the previous month."});}
-    const yearRows=expenses.filter(e=>e.date.startsWith(year)).sort((a,b)=>b.price-a.price||b.date.localeCompare(a.date));
-    if(yearRows.length){const e=yearRows[0];observations.push({icon:"✨",text:`Largest transaction this year: ${money(e.price)} for “${e.item}” on ${new Date(e.date+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"numeric"})}.`});}
-    if(!observations.length){host.innerHTML='<p class="chart-subtitle">Add a few expenses and these observations will grow from your actual records.</p>';return;}
-    host.innerHTML=observations.map(o=>`<div class="personal-insight-row"><span aria-hidden="true">${o.icon}</span><p>${escapeHTML(o.text)}</p></div>`).join("");
   }
   function renderTrendChart(year){
     const holder=$("spendingTrends"),legend=$("trendLegend");holder.innerHTML="";legend.innerHTML="";
@@ -481,14 +388,8 @@
     const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   function exportJSON(){
-    const payload={app:"Little Garden Expense Tracker",schemaVersion:2,currency:"PHP",exportType:"full-backup",exportedAt:new Date().toISOString(),categories:categoryNames,expenses,templates:expenseTemplates,savedViews:customViews};
-    downloadFile(`little-garden-backup-${localDate()}.json`,JSON.stringify(payload,null,2),"application/json;charset=utf-8");
-  }
-  function exportTransferPackage(){
-    const payload={app:"Little Garden Expense Tracker",schemaVersion:2,currency:"PHP",exportType:"device-transfer",exportedAt:new Date().toISOString(),categories:categoryNames,expenses,templates:expenseTemplates,savedViews:customViews};
-    downloadFile(`little-garden-transfer-${localDate()}.json`,JSON.stringify(payload,null,2),"application/json;charset=utf-8");
-    $("importMessage").textContent="Transfer package created. Move this file to your other device, choose it there, review the import, then confirm.";
-    $("importMessage").style.color="var(--deep)";
+    const payload={app:"Little Garden Expense Tracker",schemaVersion:1,currency:"PHP",exportedAt:new Date().toISOString(),categories:categoryNames,expenses};
+    downloadFile(`little-garden-expenses-${localDate()}.json`,JSON.stringify(payload,null,2),"application/json;charset=utf-8");
   }
   function csvCell(value){const s=String(value??"");return /[",\r\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;}
   function exportCSV(){
@@ -507,61 +408,24 @@
   async function importFile(event){
     const file=event.target.files?.[0];if(!file)return;const message=$("importMessage");message.textContent="";
     try{
-      if(file.size>25*1024*1024)throw new Error("File is larger than 25 MB. Please use a smaller backup.");
-      const text=await file.text();let imported=[],parsed=null,isPackage=false;
-      if(file.name.toLowerCase().endsWith(".csv")||file.type==="text/csv") imported=parseCSV(text);
+      if(file.size>15*1024*1024)throw new Error("File is larger than 15 MB. Please use a smaller backup.");
+      const text=await file.text();let imported;
+      if(file.name.toLowerCase().endsWith(".csv")||file.type==="text/csv")imported=parseCSV(text);
       else{
-        parsed=JSON.parse(text);const list=Array.isArray(parsed)?parsed:parsed.expenses;
-        if(!Array.isArray(list))throw new Error("Backup should contain an expenses array.");
-        imported=list.map((e,i)=>normalizeExpense(e,i));isPackage=!!(parsed&&typeof parsed==="object"&&(Array.isArray(parsed.templates)||Array.isArray(parsed.savedViews)));
+        const parsed=JSON.parse(text);const list=Array.isArray(parsed)?parsed:parsed.expenses;
+        if(!Array.isArray(list))throw new Error("JSON backup should contain an expenses array.");
+        imported=list.map((e,i)=>normalizeExpense(e,i));
       }
-      const mode=$("importMode").value,existingIds=new Set(mode==="merge"?expenses.map(e=>e.id):[]);
-      const signatures=new Set(mode==="merge"?expenses.map(e=>expenseSignature(e)):[]);
-      let sameId=0,duplicates=0,newRecords=0;
-      imported.forEach(e=>{if(existingIds.has(e.id))sameId++;else if(signatures.has(expenseSignature(e)))duplicates++;else newRecords++;});
-      const templateCount=isPackage&&Array.isArray(parsed.templates)?parsed.templates.length:0;
-      const viewCount=isPackage&&Array.isArray(parsed.savedViews)?parsed.savedViews.length:0;
-      const summary=`File: ${file.name}
-Expenses in file: ${imported.length}
-New records: ${mode==="replace"?imported.length:newRecords}
-Matching record IDs: ${mode==="merge"?sameId:0}
-Possible duplicate purchases: ${mode==="merge"?duplicates:0}
-Templates: ${templateCount}
-Saved views: ${viewCount}
-
-Import mode: ${mode==="merge"?"Merge with current records":"Replace all current expense records"}.`;
-      if(!window.confirm(`${summary}
-
-Continue?${duplicates?" Possible duplicates will be skipped during merge.":""}`)) {message.textContent="Import cancelled. Nothing was changed.";return;}
-      let result=[];
-      if(mode==="replace") result=imported;
-      else{
-        const byId=new Map(expenses.map(e=>[e.id,e]));
-        const seen=new Set(expenses.map(expenseSignature));
-        imported.forEach(e=>{
-          if(byId.has(e.id)){byId.set(e.id,e);return;}
-          const sig=expenseSignature(e);if(seen.has(sig))return;
-          byId.set(e.id,e);seen.add(sig);
-        });
-        result=[...byId.values()];
-      }
+      const unique=new Map();
+      if($("importMode").value==="merge")expenses.forEach(e=>unique.set(e.id,e));
+      imported.forEach(e=>unique.set(e.id,e));
+      const result=[...unique.values()];
       if(result.length>100000)throw new Error("Import would exceed 100,000 records.");
       const previous=expenses;expenses=result;
       if(!saveExpenses()){expenses=previous;return;}
-      if(isPackage){
-        const incomingTemplates=Array.isArray(parsed.templates)?parsed.templates.filter(t=>t&&typeof t.name==="string"&&String(t.item||"").trim()&&categoryNames.includes(t.category)).map(t=>({id:String(t.id||makeId()),name:String(t.name).slice(0,60),item:String(t.item).slice(0,120),price:Number(t.price)||0,category:t.category,notes:String(t.notes||"").slice(0,500)})):[];
-        const incomingViews=Array.isArray(parsed.savedViews)?parsed.savedViews.filter(v=>v&&typeof v.name==="string"&&v.state).map(v=>({name:v.name.slice(0,40),state:{query:String(v.state.query||""),category:categoryNames.includes(v.state.category)?v.state.category:"",month:String(v.state.month||""),sort:String(v.state.sort||"date-desc")}})):[];
-        if(mode==="replace") {expenseTemplates=incomingTemplates;customViews=incomingViews;}
-        else{
-          const templateMap=new Map(expenseTemplates.map(t=>[t.id,t]));incomingTemplates.forEach(t=>templateMap.set(t.id,t));expenseTemplates=[...templateMap.values()];
-          const viewNames=new Set(customViews.map(v=>v.name.toLowerCase()));incomingViews.forEach(v=>{if(!viewNames.has(v.name.toLowerCase()))customViews.push(v);});
-        }
-        try{localStorage.setItem(TEMPLATE_STORAGE_KEY,JSON.stringify(expenseTemplates));localStorage.setItem("little-garden-saved-views",JSON.stringify(customViews));}catch(e){message.textContent="Expenses imported, but templates or saved views could not all be saved because browser storage is full.";message.style.color="#a84943";renderAll();return;}
-      }
-      renderAll();message.textContent=`Transfer complete: ${expenses.length} expense records now available. ${isPackage?`${expenseTemplates.length} templates and ${customViews.length} saved views available.`:"CSV/expense records imported."}`;message.style.color="var(--deep)";
+      renderAll();message.textContent=`Imported ${imported.length} record${imported.length===1?"":"s"} (${ $("importMode").value==="merge"?"merged":"replaced"}).`;message.style.color="var(--deep)";
     }catch(err){message.textContent=`Import failed: ${err.message}`;message.style.color="#a84943";}
     finally{event.target.value="";}
   }
-  function expenseSignature(e){return `${e.date}|${Math.round(Number(e.price)*100)}|${normalizeDescription(e.item)}`;}
   init();
 })();
