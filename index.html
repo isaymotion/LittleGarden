@@ -24,7 +24,7 @@
 <button class="button button-outline" id="exportJsonBtn" type="button">Backup</button>
 </div>
 </header>
-<nav aria-label="Main sections" class="section-nav"><button aria-current="page" class="section-tab is-active" data-page="home" type="button">Home</button><button aria-current="false" class="section-tab" data-page="reports" type="button">Reports</button><button aria-current="false" class="section-tab" data-page="journal" type="button">Journal</button><button aria-current="false" class="section-tab" data-page="tools" type="button">Tools</button></nav><main>
+<nav aria-label="Main sections" class="section-nav" id="mainNavigation"><button aria-current="page" class="section-tab is-active" data-page="home" type="button"><span class="nav-icon" aria-hidden="true">⌂</span><span>Home</span></button><button aria-current="false" class="section-tab" data-page="journal" type="button"><span class="nav-icon" aria-hidden="true">☷</span><span>Transactions</span></button><button aria-current="false" class="section-tab" data-page="reports" type="button"><span class="nav-icon" aria-hidden="true">◒</span><span>Insights</span></button><button aria-current="false" class="section-tab" data-page="tools" type="button"><span class="nav-icon" aria-hidden="true">⚙</span><span>Tools</span></button></nav><main>
 
 
 
@@ -80,6 +80,9 @@
 <strong class="summary-value" id="dailyAverage">₱0.00</strong>
 <span class="summary-note">Based on days elapsed</span>
 </article>
+</section><section aria-labelledby="recentTitle" class="panel recent-panel">
+<div class="section-heading"><div><p class="eyebrow">JUST ADDED TO YOUR GARDEN</p><h2 id="recentTitle">Recent transactions</h2><p class="chart-subtitle">A quick look at your latest entries.</p></div><button class="button button-outline" id="viewAllTransactionsBtn" type="button">View all</button></div>
+<div class="recent-transaction-list" id="recentTransactions"><div class="recent-empty">Your recent expenses will appear here.</div></div>
 </section><section aria-labelledby="comparisonTitle" class="panel comparison-panel">
 <div class="section-heading"><div><p class="eyebrow">GENTLE MONTHLY REFLECTION</p><h2 id="comparisonTitle">Month-to-month</h2></div><span aria-hidden="true" class="leaf-badge">↗</span></div>
 <div class="comparison-grid">
@@ -90,7 +93,7 @@
 <div aria-label="Category changes compared with previous month" class="category-comparison" id="categoryComparison"></div>
 </section></div><div class="page-view" data-view="reports" hidden="" id="reportsView"><section aria-labelledby="reportTitle" class="panel report-panel">
 <div class="section-heading report-heading">
-<div><p class="eyebrow">YOUR SPENDING, AT A GLANCE</p><h2 id="reportTitle">Monthly garden</h2></div>
+<div><p class="eyebrow">YOUR SPENDING, AT A GLANCE</p><h2 id="reportTitle">Spending insights</h2><p class="chart-subtitle">Explore category patterns, daily totals, and longer-term trends.</p></div>
 <label class="month-picker-label" for="reportMonth">Month
               <input id="reportMonth" type="month"/>
 </label>
@@ -153,7 +156,7 @@
 <p aria-live="polite" class="calendar-selection" id="calendarSelection" role="status">No day selected.</p>
 </section></div><div class="page-view" data-view="journal" hidden="" id="journalView"><section aria-labelledby="transactionsTitle" class="panel transactions-panel">
 <div class="section-heading transaction-heading">
-<div><p class="eyebrow">YOUR RECORDS</p><h2 id="transactionsTitle">Expense journal</h2></div>
+<div><p class="eyebrow">YOUR RECORDS</p><h2 id="transactionsTitle">Transactions</h2><p class="chart-subtitle">Search, filter, sort, edit, or remove any recorded expense.</p></div>
 <span class="count-pill" id="allCount">0 entries</span>
 </div>
 <div class="saved-views-row">
@@ -182,6 +185,43 @@
 </section></div><div class="page-view" data-view="tools" hidden="" id="toolsView"><section class="panel tools-panel">
 <div class="section-heading"><div><p class="eyebrow">YOUR DATA, YOURS TO KEEP</p><h2>Garden tools</h2></div></div>
 <div class="tools-grid">
+<div class="tool-item pdf-export-tool">
+  <span class="tool-icon">▤</span>
+  <div>
+    <h3>Export a polished PDF</h3>
+    <p>Create a printable report for a week, month, or year. Includes every transaction, charts, and spending insights. Choose a clean spreadsheet-style report or a more visual garden-themed design.</p>
+    <div class="pdf-export-controls">
+      <label for="pdfPeriod">Report period
+        <select id="pdfPeriod">
+          <option value="week">Week</option>
+          <option value="month" selected>Month</option>
+          <option value="year">Year</option>
+        </select>
+      </label>
+      <label id="pdfWeekField" for="pdfWeekDate" hidden>Any date in the week
+        <input id="pdfWeekDate" type="date"/>
+      </label>
+      <label id="pdfMonthField" for="pdfMonth">Month
+        <input id="pdfMonth" type="month"/>
+      </label>
+      <label id="pdfYearField" for="pdfYear" hidden>Year
+        <select id="pdfYear"></select>
+      </label>
+      <label for="pdfLayout">PDF layout
+        <select id="pdfLayout">
+          <option value="spreadsheet" selected>Clean &amp; Spreadsheet-Style</option>
+          <option value="visual">Modern &amp; Visual</option>
+        </select>
+      </label>
+      <label class="pdf-check"><input id="pdfIncludeCharts" type="checkbox" checked/> Include charts</label>
+      <label class="pdf-check"><input id="pdfIncludeInsights" type="checkbox" checked/> Include spending insights</label>
+      <p class="chart-subtitle pdf-export-note">All transactions in the selected period will be included. In the print dialog, choose “Save as PDF” to save a PDF file.</p>
+      <button class="button button-primary" id="exportPdfBtn" type="button">Prepare PDF report</button>
+      <p aria-live="polite" class="form-message" id="pdfExportMessage" role="status"></p>
+    </div>
+  </div>
+</div>
+
 <div class="tool-item"><span class="tool-icon">↗</span><div><h3>Export records</h3><p>Save a full JSON backup or a spreadsheet-friendly CSV file.</p><div class="tool-buttons"><button class="button button-outline" id="exportCsvBtn" type="button">Export CSV</button><button class="button button-outline" id="exportJsonBtn2" type="button">Export JSON</button></div></div></div>
 <div class="tool-item"><span class="tool-icon">↙</span><div><h3>Restore a backup</h3><p>Import a JSON backup or CSV. You can replace records or merge them.</p><div class="tool-buttons"><label class="button button-outline file-button" for="importFile">Choose file</label><input accept=".json,.csv,application/json,text/csv" hidden="" id="importFile" type="file"/><select aria-label="Import mode" id="importMode"><option value="merge">Merge with current records</option><option value="replace">Replace all records</option></select></div><p aria-live="polite" class="form-message" id="importMessage" role="status"></p></div></div>
 <div class="tool-item"><span class="tool-icon">♡</span><div><h3>Private by design</h3><p>Your entries stay in this browser using local storage. No account or server is required. Export backups regularly, especially before clearing browser data.</p></div></div>
@@ -201,6 +241,7 @@
     window.scrollTo({top: 0, behavior: 'auto'});
   }
   tabs.forEach(tab => tab.addEventListener('click', () => showPage(tab.dataset.page)));
+  window.addEventListener('hashchange', () => { const target = location.hash.slice(1); if (['home','journal','reports','tools'].includes(target)) showPage(target); });
   document.querySelector('.brand')?.addEventListener('click', event => { event.preventDefault(); showPage('home'); });
 })();
 </script>

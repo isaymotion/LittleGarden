@@ -69,6 +69,12 @@
   }
   function getCategory(name){return categories.find(c=>c.name===name)||categories[categories.length-1];}
   function sum(rows){return rows.reduce((n,e)=>n+e.price,0);}
+  function showAppPage(name){
+    const tabs=[...document.querySelectorAll(".section-tab")],views=[...document.querySelectorAll(".page-view")];
+    tabs.forEach(tab=>{const active=tab.dataset.page===name;tab.classList.toggle("is-active",active);tab.setAttribute("aria-current",active?"page":"false");});
+    views.forEach(view=>{const active=view.dataset.view===name;view.hidden=!active;view.classList.toggle("is-active",active);});
+    window.scrollTo({top:0,behavior:"auto"});
+  }
   function init(){
     $("expenseDate").value=localDate();
     $("reportMonth").value=currentMonth();
@@ -80,6 +86,8 @@
     initTheme();
     bindEvents();
     initInsightControls();
+    initPdfExportControls();
+    $("viewAllTransactionsBtn").addEventListener("click",()=>showAppPage("journal"));
     renderAll();
     if("serviceWorker" in navigator && location.protocol!=="file:") navigator.serviceWorker.register("./sw.js").catch(err=>console.warn("Offline cache unavailable",err));
   }
@@ -129,6 +137,8 @@
     $("exportJsonBtn").addEventListener("click",exportJSON);
     $("exportJsonBtn2").addEventListener("click",exportJSON);
     $("exportCsvBtn").addEventListener("click",exportCSV);
+    $("exportPdfBtn").addEventListener("click",exportPDFReport);
+    $("pdfPeriod").addEventListener("change",updatePdfPeriodControls);
     $("importFile").addEventListener("change",importFile);
 
     window.addEventListener("beforeinstallprompt",event=>{event.preventDefault();installPrompt=event;$("installBtn").classList.remove("hidden");});
@@ -178,7 +188,13 @@
     expenses.splice(Math.min(undoEntry.index,expenses.length),0,undoEntry.entry);
     if(saveExpenses()){renderAll();$("undoToast").hidden=true;if(undoTimer)clearTimeout(undoTimer);undoTimer=null;undoEntry=null;}
   }
-  function renderAll(){renderSummary();renderReports();renderMonthFilter();renderExpenses();renderCalendar();renderComparison();renderSavedViews();renderInsights();$("allCount").textContent=`${expenses.length} ${expenses.length===1?"entry":"entries"}`;}
+  function renderAll(){renderSummary();renderReports();renderMonthFilter();renderExpenses();renderCalendar();renderComparison();renderSavedViews();renderInsights();renderRecentTransactions();$("allCount").textContent=`${expenses.length} ${expenses.length===1?"entry":"entries"}`;}
+  function renderRecentTransactions(){
+    const host=$("recentTransactions"); if(!host)return; host.innerHTML="";
+    const rows=[...expenses].sort((a,b)=>b.date.localeCompare(a.date)||String(b.createdAt||"").localeCompare(String(a.createdAt||""))).slice(0,5);
+    if(!rows.length){host.innerHTML="<div class=\"recent-empty\"><span aria-hidden=\"true\">🌱</span><strong>No transactions yet</strong><span>Your first saved expense will show up here.</span></div>";return;}
+    rows.forEach(e=>{const c=getCategory(e.category),row=document.createElement("button");row.type="button";row.className="recent-transaction";row.innerHTML=`<span class=\"recent-category-icon\" aria-hidden=\"true\">${c.icon}</span><span class=\"recent-main\"><strong>${escapeHTML(e.item)}</strong><small>${escapeHTML(new Date(e.date+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"numeric"}))} · ${escapeHTML(e.category)}</small></span><strong class=\"recent-amount\">${money(e.price)}</strong><span class=\"recent-chevron\" aria-hidden=\"true\">›</span>`;row.addEventListener("click",()=>{showAppPage("journal");$("searchInput").value=e.item;$("categoryFilter").value="";$("monthFilter").value="";selectedCalendarDate="";renderExpenses();});host.appendChild(row);});
+  }
   function selectedMonth(){return $("reportMonth").value||currentMonth();}
   function renderSummary(){
     const month=selectedMonth();const rows=expenses.filter(e=>e.date.startsWith(month));const [y,m]=month.split("-").map(Number);
@@ -405,6 +421,165 @@
     const required=["date","item","price","category"];for(const key of required)if(!headers.includes(key))throw new Error(`CSV is missing the required "${key}" column.`);
     return rows.map((values,i)=>{const obj={};headers.forEach((h,j)=>obj[h]=values[j]??"");return normalizeExpense(obj,i);});
   }
+
+  function initPdfExportControls(){
+    const years=new Set([String(new Date().getFullYear())]);
+    expenses.forEach(e=>years.add(e.date.slice(0,4)));
+    const select=$("pdfYear");
+    select.innerHTML="";
+    [...years].sort().reverse().forEach(y=>select.add(new Option(y,y)));
+    select.value=String(new Date().getFullYear());
+    $("pdfWeekDate").value=localDate();
+    $("pdfMonth").value=currentMonth();
+    updatePdfPeriodControls();
+  }
+  function updatePdfPeriodControls(){
+    const period=$("pdfPeriod").value;
+    $("pdfWeekField").hidden=period!=="week";
+    $("pdfMonthField").hidden=period!=="month";
+    $("pdfYearField").hidden=period!=="year";
+  }
+  function isoDate(date){
+    return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+  }
+  function shiftDate(date,days){
+    const copy=new Date(date.getFullYear(),date.getMonth(),date.getDate());
+    copy.setDate(copy.getDate()+days);
+    return copy;
+  }
+  function getPdfDateRange(){
+    const period=$("pdfPeriod").value;
+    if(period==="week"){
+      const raw=$("pdfWeekDate").value;
+      if(!validDate(raw))throw new Error("Choose a date within the week you want to export.");
+      const d=new Date(`${raw}T00:00:00`);
+      const monday=shiftDate(d,-((d.getDay()+6)%7));
+      return {period,start:isoDate(monday),end:isoDate(shiftDate(monday,6)),label:`Week of ${monday.toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"})}`};
+    }
+    if(period==="month"){
+      const value=$("pdfMonth").value;
+      if(!/^\d{4}-\d{2}$/.test(value))throw new Error("Choose a month to export.");
+      const [y,m]=value.split("-").map(Number);
+      return {period,start:`${value}-01`,end:isoDate(new Date(y,m,0)),label:new Date(y,m-1,1).toLocaleDateString("en-PH",{month:"long",year:"numeric"})};
+    }
+    const year=$("pdfYear").value;
+    if(!/^\d{4}$/.test(year))throw new Error("Choose a year to export.");
+    return {period,start:`${year}-01-01`,end:`${year}-12-31`,label:year};
+  }
+  function pdfEscape(value){
+    return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+  function pdfDateLabel(value){
+    return new Date(`${value}T00:00:00`).toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"});
+  }
+  function pdfTableRows(rows){
+    if(!rows.length)return '<tr><td colspan="4" class="empty-row">No expenses recorded in this period.</td></tr>';
+    return rows.map(e=>`<tr><td>${pdfEscape(pdfDateLabel(e.date))}</td><td class="description-cell">${pdfEscape(e.item)}${e.notes?`<small>${pdfEscape(e.notes)}</small>`:""}</td><td>${pdfEscape(e.category)}</td><td class="amount">${money(e.price)}</td></tr>`).join("");
+  }
+  function pdfBarRows(items,total){
+    if(!items.length)return '<p class="muted">No spending to chart for this period.</p>';
+    return items.map(item=>`<div class="bar-row"><span class="bar-label">${pdfEscape(item.name)}</span><span class="bar-track"><i style="width:${total?Math.max(0,Math.min(100,item.value/total*100)):0}%"></i></span><strong>${money(item.value)}</strong><small>${total?(item.value/total*100).toFixed(1):"0.0"}%</small></div>`).join("");
+  }
+  function pdfTrendRows(range,rows){
+    let bins=[];
+    if(range.period==="year"){
+      bins=Array.from({length:12},(_,i)=>({label:new Date(Number(range.start.slice(0,4)),i,1).toLocaleDateString("en-PH",{month:"short"}),start:`${range.start.slice(0,4)}-${String(i+1).padStart(2,"0")}-01`,end:isoDate(new Date(Number(range.start.slice(0,4)),i+1,0))}));
+    }else if(range.period==="month"){
+      const [y,m]=range.start.split("-").map(Number),days=new Date(y,m,0).getDate();
+      bins=Array.from({length:days},(_,i)=>({label:String(i+1),start:`${range.start.slice(0,7)}-${String(i+1).padStart(2,"0")}`,end:`${range.start.slice(0,7)}-${String(i+1).padStart(2,"0")}`})).filter((_,i)=>i===0||i===days-1||((i+1)%5===0));
+    }else{
+      const start=new Date(`${range.start}T00:00:00`);
+      bins=Array.from({length:7},(_,i)=>{const d=shiftDate(start,i);return {label:d.toLocaleDateString("en-PH",{weekday:"short"}),start:isoDate(d),end:isoDate(d)};});
+    }
+    const values=bins.map(bin=>({...bin,value:sum(rows.filter(e=>e.date>=bin.start&&e.date<=bin.end))}));
+    const max=Math.max(1,...values.map(v=>v.value));
+    return values.map(v=>`<div class="trend-row"><span>${pdfEscape(v.label)}</span><span class="trend-track"><i style="width:${v.value/max*100}%"></i></span><strong>${money(v.value)}</strong></div>`).join("");
+  }
+  function exportPDFReport(){
+    const message=$("pdfExportMessage");
+    message.textContent="";
+    try{
+      const range=getPdfDateRange();
+      const rows=expenses.filter(e=>e.date>=range.start&&e.date<=range.end).sort((a,b)=>a.date.localeCompare(b.date)||a.item.localeCompare(b.item));
+      const total=sum(rows),count=rows.length,average=count?total/count:0;
+      const categoryTotals=categories.map(c=>({name:c.name,icon:c.icon,color:c.color,value:sum(rows.filter(e=>e.category===c.name))}));
+      const usedCategories=categoryTotals.filter(c=>c.value>0).sort((a,b)=>b.value-a.value);
+      const topCategory=usedCategories[0];
+      const largest=[...rows].sort((a,b)=>b.price-a.price)[0];
+      const categoryTable=categoryTotals.map(c=>`<tr><td><span class="swatch" style="background:${c.color}"></span>${pdfEscape(c.name)}</td><td class="amount">${money(c.value)}</td><td class="amount">${total?(c.value/total*100).toFixed(1):"0.0"}%</td></tr>`).join("");
+      const includeCharts=$("pdfIncludeCharts").checked;
+      const includeInsights=$("pdfIncludeInsights").checked;
+      const visual=$("pdfLayout").value==="visual";
+      let comparisonLabel="";
+      const durationDays=Math.round((new Date(`${range.end}T00:00:00`)-new Date(`${range.start}T00:00:00`))/86400000)+1;
+      let previousStart,previousEnd;
+      if(range.period==="month"){
+        const [y,m]=range.start.split("-").map(Number),d=new Date(y,m-2,1);
+        previousStart=isoDate(d);previousEnd=isoDate(new Date(d.getFullYear(),d.getMonth()+1,0));
+        comparisonLabel=d.toLocaleDateString("en-PH",{month:"long",year:"numeric"});
+      }else if(range.period==="year"){
+        const y=Number(range.start.slice(0,4))-1;previousStart=`${y}-01-01`;previousEnd=`${y}-12-31`;comparisonLabel=String(y);
+      }else{
+        const d=new Date(`${range.start}T00:00:00`);previousStart=isoDate(shiftDate(d,-7));previousEnd=isoDate(shiftDate(d,-1));comparisonLabel=`${pdfDateLabel(previousStart)} – ${pdfDateLabel(previousEnd)}`;
+      }
+      const previousTotal=sum(expenses.filter(e=>e.date>=previousStart&&e.date<=previousEnd));
+      const change=previousTotal===0?(total===0?0:null):((total-previousTotal)/previousTotal)*100;
+      const insightCards=`
+        <div class="insight-grid">
+          <div class="insight"><span>Top category</span><strong>${topCategory?pdfEscape(topCategory.name):"No spending yet"}</strong><small>${topCategory?money(topCategory.value):"—"}</small></div>
+          <div class="insight"><span>Largest transaction</span><strong>${largest?pdfEscape(largest.item):"No transactions"}</strong><small>${largest?`${money(largest.price)} · ${pdfEscape(pdfDateLabel(largest.date))}`:"—"}</small></div>
+          <div class="insight"><span>Average per transaction</span><strong>${money(average)}</strong><small>${count} transaction${count===1?"":"s"}</small></div>
+          <div class="insight"><span>Compared with previous period</span><strong>${change===null?(total>0?"New activity":"—"):`${change>0?"+":""}${change.toFixed(1)}%`}</strong><small>${pdfEscape(comparisonLabel)} · ${money(previousTotal)}</small></div>
+        </div>`;
+      const chartSection=includeCharts?`
+        <section class="report-section"><h2>${range.period==="week"?"Daily spending":range.period==="month"?"Daily spending trend":"Monthly spending trend"}</h2><div class="chart-panel">${pdfTrendRows(range,rows)}</div></section>`:"";
+      const insightSection=includeInsights?`<section class="report-section"><h2>Spending insights</h2>${insightCards}</section>`:"";
+      const categorySection=includeCharts?`
+        <section class="report-section"><h2>Category breakdown</h2><div class="two-col">
+          <div class="chart-panel">${pdfBarRows(usedCategories,total)}</div>
+          <div class="chart-panel"><h3>Category totals</h3><table><thead><tr><th>Category</th><th class="amount">Amount</th><th class="amount">Share</th></tr></thead><tbody>${categoryTable}</tbody><tfoot><tr class="total-row"><td>Total</td><td class="amount">${money(total)}</td><td class="amount">${total?"100.0":"0.0"}%</td></tr></tfoot></table></div>
+        </div></section>`:"";
+      const htmlDoc=`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Little Garden — ${pdfEscape(range.label)} report</title><style>
+        :root{--ink:#263e31;--muted:#718274;--deep:#315b43;--leaf:#80a878;--line:#dfe5d8;--sage:#e9f0df}
+        *{box-sizing:border-box}body{margin:0;background:#f3f5ef;color:var(--ink);font:10pt/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+        .report{max-width:1000px;margin:24px auto;padding:30px;background:white;border:1px solid var(--line);box-shadow:0 8px 30px #243d2b12}
+        .masthead{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;border-bottom:2px solid var(--deep);padding-bottom:16px;margin-bottom:20px}
+        .brandline{display:flex;gap:12px;align-items:center}.leaf{width:42px;height:42px;border-radius:14px;background:var(--sage);display:grid;place-items:center;font-size:24px;color:var(--deep)}
+        h1{font:700 25pt/1.1 Georgia,serif;margin:0 0 4px}.subtitle{color:var(--muted);font-size:10pt}.period{text-align:right;min-width:180px}.period strong{display:block;font-size:15pt}.period span{display:block;color:var(--muted);margin-top:4px}
+        .visual .masthead{background:linear-gradient(110deg,#f0f5e8,#fffdf7);padding:22px;border:1px solid var(--line);border-radius:16px}
+        .visual h1{color:var(--deep)}.eyebrow{font-size:8pt;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 6px}
+        h2{font-size:14pt;margin:0 0 12px}h3{font-size:11pt;margin:0 0 8px}
+        .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 0 24px}.metric{border:1px solid var(--line);background:#fbfcf8;border-radius:10px;padding:13px}.metric span{display:block;color:var(--muted);font-size:8.5pt}.metric strong{display:block;font-size:16pt;margin-top:5px;overflow-wrap:anywhere}
+        .visual .metric{background:linear-gradient(145deg,#fbfcf8,#f1f5e9);border-radius:13px}.report-section{margin:22px 0;break-inside:auto}.report-section h2{padding-bottom:7px;border-bottom:1px solid var(--line)}
+        .two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px}.chart-panel{border:1px solid var(--line);border-radius:10px;padding:14px}.bar-row{display:grid;grid-template-columns:minmax(130px,1.4fr) minmax(90px,2fr) auto 48px;gap:9px;align-items:center;margin:8px 0;font-size:9pt}.bar-label{overflow-wrap:anywhere}.bar-track,.trend-track{height:9px;background:#edf1e9;border-radius:99px;overflow:hidden}.bar-track i,.trend-track i{display:block;height:100%;background:var(--leaf);border-radius:99px}.bar-row strong,.trend-row strong{white-space:nowrap;font-size:8.5pt}.bar-row small{text-align:right;color:var(--muted)}
+        .trend-row{display:grid;grid-template-columns:54px minmax(60px,1fr) auto;gap:10px;align-items:center;margin:7px 0;font-size:9pt}.trend-track i{background:var(--deep)}
+        .insight-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.insight{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fbfcf8;break-inside:avoid}.insight span,.insight small{display:block;color:var(--muted);font-size:8.5pt}.insight strong{display:block;margin:4px 0;overflow-wrap:anywhere}
+        table{width:100%;border-collapse:collapse;font-size:8.5pt}th,td{padding:8px 9px;border:1px solid var(--line);text-align:left;vertical-align:top}th{background:#e9f0df;color:#284c37;font-weight:700}thead{display:table-header-group}.amount{text-align:right;white-space:nowrap}.swatch{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px}.description-cell{min-width:160px}.description-cell small{display:block;color:var(--muted);margin-top:3px;white-space:pre-wrap}.empty-row{text-align:center;color:var(--muted);padding:20px}
+        .total-row td{font-weight:700;background:#f3f6ef}.notes{font-size:8.5pt;color:var(--muted);margin-top:18px}.footer{border-top:1px solid var(--line);margin-top:24px;padding-top:10px;color:var(--muted);font-size:8pt;display:flex;justify-content:space-between;gap:12px}
+        .visual .report-section h2{color:var(--deep)}.spreadsheet .masthead{padding-bottom:12px}.spreadsheet .metrics{gap:0;border:1px solid var(--line)}.spreadsheet .metric{border-radius:0;border:0;border-right:1px solid var(--line);background:#f4f7f1}.spreadsheet .metric:last-child{border-right:0}
+        .print-hint{font-size:9pt;color:var(--muted);margin:0 0 18px}
+        @page{size:auto;margin:13mm}
+        @media print{body{background:white;font-size:9pt}.report{max-width:none;margin:0;padding:0;border:0;box-shadow:none}.no-print{display:none!important}.metrics{grid-template-columns:repeat(4,minmax(0,1fr))}.report-section{break-inside:auto}.chart-panel,.insight,.metric{break-inside:avoid}table{page-break-inside:auto}tr{break-inside:avoid;page-break-inside:avoid}thead{display:table-header-group}.masthead{break-inside:avoid}.footer{break-inside:avoid}a{color:inherit;text-decoration:none}}
+        @media screen and (max-width:640px){.report{margin:0;padding:16px;border:0}.masthead{display:block}.period{text-align:left;margin-top:14px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.two-col{grid-template-columns:1fr}.bar-row{grid-template-columns:minmax(90px,1fr) minmax(50px,1fr) auto}.bar-row small{display:none}table{font-size:8pt}th,td{padding:6px 5px}.description-cell{min-width:120px}}
+        </style></head><body><main class="report ${visual?"visual":"spreadsheet"}">
+        <header class="masthead"><div class="brandline"><div class="leaf">❀</div><div><p class="eyebrow">Little Garden · Expense Tracker</p><h1>${visual?"Spending in Bloom":"Expense Report"}</h1><div class="subtitle">${visual?"A thoughtful look at your money":"Personal spending statement"}</div></div></div><div class="period"><strong>${pdfEscape(range.label)}</strong><span>${pdfEscape(pdfDateLabel(range.start))} – ${pdfEscape(pdfDateLabel(range.end))}</span><span>Generated ${pdfEscape(new Date().toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"}))}</span></div></header>
+        <div class="metrics"><div class="metric"><span>Total spent</span><strong>${money(total)}</strong></div><div class="metric"><span>Transactions</span><strong>${count}</strong></div><div class="metric"><span>Days with expenses</span><strong>${new Set(rows.map(e=>e.date)).size}</strong></div><div class="metric"><span>Average per transaction</span><strong>${money(average)}</strong></div></div>
+        ${categorySection}${chartSection}${insightSection}
+        <section class="report-section"><h2>All transactions <span class="subtitle">(${count})</span></h2><table><thead><tr><th>Date</th><th>Description / notes</th><th>Category</th><th class="amount">Amount (PHP)</th></tr></thead><tbody>${pdfTableRows(rows)}</tbody><tfoot><tr class="total-row"><td colspan="3">Total for selected period</td><td class="amount">${money(total)}</td></tr></tfoot></table></section>
+        <p class="notes">Amounts are shown in Philippine pesos (PHP). This report includes all saved transactions dated within the selected period. Your records remain stored locally in your browser.</p><footer class="footer"><span>Little Garden · Better spending, brighter days.</span><span>${pdfEscape(range.start)} to ${pdfEscape(range.end)}</span></footer>
+        <p class="print-hint no-print">Use your browser’s Print command, then choose “Save as PDF” (wording varies by device).</p>
+        </main></body></html>`;
+      const printWindow=window.open("","_blank");
+      if(!printWindow){message.textContent="Your browser blocked the report window. Allow pop-ups for this app, then try again.";return;}
+      printWindow.document.open();printWindow.document.write(htmlDoc);printWindow.document.close();
+      let didPrint=false;
+      const triggerPrint=()=>{if(didPrint)return;didPrint=true;try{printWindow.focus();printWindow.print();}catch(err){console.warn("Print dialog could not open automatically",err);}};
+      printWindow.addEventListener("load",()=>setTimeout(triggerPrint,350),{once:true});
+      setTimeout(triggerPrint,900);
+      message.textContent="Your report is ready. In the print dialog, choose Save as PDF.";
+    }catch(err){message.textContent=err.message||"Could not prepare the PDF report.";}
+  }
+
   async function importFile(event){
     const file=event.target.files?.[0];if(!file)return;const message=$("importMessage");message.textContent="";
     try{

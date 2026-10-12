@@ -7,11 +7,15 @@ A mobile-first, garden-inspired monthly expense tracker for GitHub Pages. Record
 - **Local-first storage:** expenses are saved in this browser using `localStorage`; no account or server/database is needed.
 - **Entry fields:** date, item/description, price in PHP, fixed category, and optional notes.
 - **12 fixed categories:** Groceries; Restaurants & Dining; Medications & Healthcare; Property & Real Estate; Utilities & Internet; Pets; Transportation; Shopping & Personal Care; Hobbies & Entertainment; Education & Professional Development; Gifts & Donations; Miscellaneous.
-- **Reports:** monthly total, number of entries, daily average, category pie chart, broader-area pie chart, and daily spending bar chart.
+- **Home dashboard:** quick expense entry, monthly summary, and the five most recent transactions; select a recent item to jump to its matching transaction.
+- **Insights:** monthly totals, category and area charts, daily spending, comparisons, calendar, and yearly trends.
+- **Transactions:** searchable, filterable, sortable history with edit and delete actions.
 - **Find records:** text search, category/month filters, and sort options.
 - **Backup/restore:** JSON backup and CSV export; imports validate records, support merge/replace, and show useful errors.
+- **PDF report export:** printable weekly, monthly, or yearly reports with spreadsheet-style (default) and visual layouts, charts, insights, and all transactions.
 - **PWA:** manifest, app icon, install prompt where supported, and a service worker for offline app-shell caching.
-- **Responsive garden theme:** works on mobile and desktop; no third-party libraries or external runtime requests.
+- **Quick expense entry:** the form sits directly below the garden banner, with compact mobile spacing and comfortable touch targets.
+- **Responsive garden theme:** works on mobile and desktop; persistent iPhone bottom navigation with Home, Transactions, Insights, and Tools; no third-party libraries or external runtime requests.
 
 ### Four spending areas
 
