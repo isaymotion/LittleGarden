@@ -316,3 +316,44 @@ button.heat-cell:hover,button.heat-cell:focus-visible{outline:2px solid var(--de
 .recent-empty span{font-size:1.3rem}.recent-empty strong{color:var(--ink)}
 #reportTitle+.chart-subtitle,#transactionsTitle+.chart-subtitle{margin-top:4px;max-width:440px}
 @media(max-width:390px){.recent-transaction{gap:8px;padding:10px 8px}.recent-category-icon{flex-basis:34px;height:34px}.recent-main strong{font-size:.84rem}.recent-main small{font-size:.69rem}.recent-amount{font-size:.82rem}}
+
+
+/* Build 5: prevent footer attribution overflow on narrow iPhone screens */
+.app-footer {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+  gap: 12px 18px;
+}
+.app-footer > span {
+  min-width: 0;
+  max-width: 100%;
+}
+.app-footer .attribution {
+  flex: 1 1 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: 1.6;
+}
+.app-footer .attribution a {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+@media (max-width: 600px) {
+  .app-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding-inline: 0;
+  }
+  .app-footer > span,
+  .app-footer .attribution {
+    display: block;
+    width: 100%;
+    flex: 0 1 auto;
+  }
+}
