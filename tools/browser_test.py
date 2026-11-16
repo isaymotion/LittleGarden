@@ -12,6 +12,16 @@ cats=["Groceries","Restaurants & Dining","Medications & Healthcare","Pets","Tran
 seed=[{"id":f"s{i}","date":d(i*3),"item":f"Item {i}","price":100+i*37.5,"category":cats[i%6],"notes":"note" if i%4==0 else "","createdAt":"2026-10-01T00:00:00.000Z"} for i in range(20)]
 seed.append({"id":"bad","date":"2026-02-31","item":"Broken","price":5,"category":"Pets"})
 seed.append({"id":"num","date":d(1),"item":"Numeric stamp","price":50,"category":"Pets","createdAt":1760000000000})
+def qr_png(seed_n):
+    """A fake QR-like picture (black squares on white) as PNG bytes."""
+    from PIL import Image
+    import io,random
+    rnd=random.Random(seed_n); n=25; px=16
+    im=Image.new('RGB',(n*px+64,n*px+64),'white')
+    for y in range(n):
+        for x in range(n):
+            if rnd.random()<0.5: im.paste((0,0,0),(32+x*px,32+y*px,32+(x+1)*px,32+(y+1)*px))
+    buf=io.BytesIO(); im.save(buf,'PNG'); return buf.getvalue()
 errors=[]
 def check(name,cond):
     print(('PASS ' if cond else 'FAIL ')+name)
@@ -175,8 +185,53 @@ with sync_playwright() as p:
         check(label+' extras restored: '+pg.inner_text('#importMessage'),pg.evaluate("JSON.parse(localStorage.getItem('little-garden-budgets')).overall")==1000 and pg.evaluate("JSON.parse(localStorage.getItem('little-garden-income-v1')).length")==1 and '0 added' in pg.inner_text('#importMessage'))
         with pg.expect_download() as dl3: pg.click('#exportCsvBtn')
         check(label+' csv has method',',method,' in open(dl3.value.path(),encoding='utf-8-sig').readline())
+        # Pay me (2.3.0)
+        ctx.grant_permissions(['clipboard-read','clipboard-write'],origin=URL.split('/index.html')[0])
+        pg.goto(URL+'#/pay-me'); pg.wait_for_selector('#payMeBody .pay-add-row')
+        check(label+' pay me starts empty with 8 accounts',pg.locator('.pay-add-row').count()==8 and pg.is_visible('.pay-empty') and pg.inner_text('#homePayMe')=='')
+        pg.click('[data-pay-edit=gcash]'); pg.wait_for_selector('[data-pay-form=gcash]')
+        pg.click('[data-pay-form=gcash] button[type=submit]')
+        check(label+' pay me empty save refused','Add a QR picture' in pg.inner_text('[data-pay-form=gcash] [data-pay-msg]'))
+        pg.set_input_files('[data-pay-file=gcash]',{'name':'gcash.png','mimeType':'image/png','buffer':qr_png(1)}); pg.wait_for_selector('[data-pay-pic=gcash] .pay-preview img')
+        pg.fill('#payName-gcash','Ma. Isabella P. Navarro'); pg.fill('#payNumber-gcash','09171234567'); pg.click('[data-pay-form=gcash] button[type=submit]')
+        pg.wait_for_selector('[data-pay-card=gcash] .pay-qr img')
+        check(label+' gcash card saved',pg.locator('.pay-grid .pay-card').count()==1 and '09171234567' in pg.inner_text('[data-pay-card=gcash]') and pg.locator('.pay-add-row').count()==7)
+        stored=pg.evaluate("""()=>new Promise(r=>{const q=indexedDB.open('little-garden-pay-me');q.onsuccess=()=>{const g=q.result.transaction('qr').objectStore('qr').get('gcash');g.onsuccess=()=>r(g.result||'')}})""")
+        check(label+' picture in IndexedDB as jpeg, not localStorage',stored.startswith('data:image/jpeg') and 'data:image' not in (pg.evaluate("localStorage.getItem('little-garden-pay-me-v1')") or 'x'))
+        pg.click('[data-pay-edit=bpi]'); pg.fill('#payNumber-bpi','1234-5678-90'); pg.click('[data-pay-form=bpi] button[type=submit]'); pg.wait_for_selector('[data-pay-card=bpi]')
+        check(label+' number-only account',pg.is_visible('[data-pay-card=bpi] .pay-noqr') and pg.locator('[data-pay-card=bpi] [data-pay-show]').count()==0)
+        pg.click('[data-pay-card=bpi] [data-pay-copy=bpi]'); pg.wait_for_timeout(150)
+        check(label+' copy number',pg.evaluate("navigator.clipboard.readText()")=='1234-5678-90' and 'Copied' in pg.inner_text('[data-pay-copy=bpi]'))
+        pg.goto(URL+'#/'); pg.wait_for_selector('#homePayMe .pay-chip')
+        check(label+' home pay me row',pg.locator('#homePayMe .pay-chip').count()==1)
+        pg.click('#homePayMe [data-pay-show=gcash]'); pg.wait_for_timeout(150)
+        check(label+' viewer opens',pg.is_visible('#payViewer') and 'GCash' in pg.inner_text('#payViewerTitle') and '09171234567' in pg.inner_text('#payViewer') and not pg.is_visible('.pay-viewer__nav'))
+        pg.keyboard.press('Escape'); check(label+' viewer closes',not pg.is_visible('#payViewer') and not pg.evaluate("document.body.classList.contains('pay-viewer-open')"))
+        pg.goto(URL+'#/pay-me'); pg.wait_for_selector('[data-pay-card=bpi]')
+        pg.click('[data-pay-card=bpi] [data-pay-edit=bpi]'); pg.set_input_files('[data-pay-file=bpi]',{'name':'bpi.png','mimeType':'image/png','buffer':qr_png(2)}); pg.wait_for_selector('[data-pay-pic=bpi] .pay-preview img')
+        check(label+' typed number kept after picking picture',pg.input_value('#payNumber-bpi')=='1234-5678-90')
+        pg.click('[data-pay-form=bpi] button[type=submit]'); pg.wait_for_selector('[data-pay-card=bpi] .pay-qr img')
+        pg.click('[data-pay-card=gcash] .pay-qr'); pg.wait_for_timeout(150)
+        pg.screenshot(path=f'{OUT}/{label}-payme-viewer.png')
+        pg.click('[data-pv=next]'); check(label+' viewer next',pg.is_visible('.pay-viewer__nav') and 'BPI' in pg.inner_text('#payViewerTitle') and '2 of 2' in pg.inner_text('.pay-viewer__count'))
+        pg.click('#payViewer',position={'x':5,'y':5}); check(label+' viewer closes on backdrop',not pg.is_visible('#payViewer'))
+        pg.screenshot(path=f'{OUT}/{label}-payme.png',full_page=True)
+        pg.reload(); pg.wait_for_selector('[data-pay-card=bpi] .pay-qr img')
+        check(label+' pay me survives reload',pg.locator('.pay-grid .pay-card').count()==2)
+        pg.goto(URL+'#/tools'); pg.wait_for_timeout(150)
+        with pg.expect_download() as dl4: pg.click('#exportJsonBtn2')
+        pm=json.load(open(dl4.value.path())).get('payMe',{}).get('accounts',{})
+        check(label+' backup carries pay me',sorted(pm)==['bpi','gcash'] and pm['gcash']['qr'].startswith('data:image/jpeg') and pm['bpi']['number']=='1234-5678-90')
+        pg.goto(URL+'#/pay-me'); pg.wait_for_selector('[data-pay-card=gcash]')
+        pg.click('[data-pay-card=gcash] [data-pay-edit=gcash]'); pg.once('dialog',lambda dlg:dlg.accept()); pg.click('[data-pay-remove=gcash]'); pg.wait_for_timeout(200)
+        check(label+' remove account',pg.locator('[data-pay-card=gcash]').count()==0 and pg.locator('.pay-add-row').count()==7)
+        pg.goto(URL+'#/tools'); pg.wait_for_timeout(150); pg.select_option('#importMode','merge')
+        pg.set_input_files('#importFile',{'name':'pm.json','mimeType':'application/json','buffer':open(dl4.value.path(),'rb').read()}); pg.wait_for_timeout(400)
+        check(label+' pay me restored by import: '+pg.inner_text('#importMessage'),'1 Pay me account restored' in pg.inner_text('#importMessage'))
+        pg.goto(URL+'#/pay-me'); pg.wait_for_selector('[data-pay-card=gcash] .pay-qr img')
+        check(label+' restored gcash picture',pg.locator('.pay-grid .pay-card').count()==2)
         # overflow check
-        for r in ['#/','#/transactions','#/insights','#/calendar','#/budget','#/tools','#/whats-new','#/about']:
+        for r in ['#/','#/transactions','#/insights','#/calendar','#/budget','#/pay-me','#/tools','#/whats-new','#/about']:
             pg.goto(URL+r); pg.wait_for_timeout(150)
             ow=pg.evaluate("document.documentElement.scrollWidth-window.innerWidth"); check(f'{label} no horizontal overflow {r} ({ow})',ow<=1)
         ctx.close()

@@ -5,7 +5,8 @@ Kept on the `dev-tools` branch so they are never published with the site (GitHub
 ## browser_test.py
 End-to-end Playwright test (Chromium) of the live app files: navigation, edit, search, calendar,
 saved views, What's New, About, theme, text size, import/undo, export, PDF, budget, recurring,
-income, payment method, suggestions, backup reminder, phone card layout, no horizontal overflow.
+income, payment method, suggestions, backup reminder, phone card layout, Pay me (QR upload,
+IndexedDB, viewer, copy, backup and restore), no horizontal overflow. Needs Pillow (makes the fake QR pictures).
 Runs twice: phone 390px light, desktop 1366px dark. Takes about 2 minutes.
 
 Put it anywhere; it only talks to a local web server.
