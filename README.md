@@ -16,10 +16,12 @@ A mobile-first, garden-inspired monthly expense tracker for GitHub Pages. Record
 - **Budget and income:** a monthly total and optional per-category limits with progress bars on Home; recurring expenses that wait on Home each month until added or skipped; optional income entries with "left after spending".
 - **Payment method:** optional Cash / GCash / Card / Bank transfer / Other on each expense, a chart by payment method, and a `method` column in the CSV.
 - **Faster entry:** description suggestions from past entries fill in the category and payment method.
+- **Pay me:** save QR codes for GCash, Maya (PayMaya), MariBank, BPI, Maya Bank, UnionBank, Security Bank and Metrobank, with the name and number on each account. Show a code full screen (white card, readable in dark mode), copy the number, or share the picture. Pictures are kept in IndexedDB (`little-garden-pay-me` database), details in `localStorage`; both are in the JSON backup. Home shows a one-tap row once a code is saved.
+- **Automatic updates:** the installed app checks for a new version each time it returns to the screen and reloads once when one takes over (later if you are typing).
 - **Backup reminder:** shown on Home when the last export is more than 30 days old.
 - **PWA:** manifest, app icon, install prompt where supported, and a service worker for offline app-shell caching.
 - **Quick expense entry:** the form sits directly below the garden banner, with compact mobile spacing and comfortable touch targets.
-- **Navigation shared with the other isaymotion apps:** dark top bar with ☰ menu, back/forward buttons (Alt+Left / Alt+Right), search, text size (Aa) and theme; docked sidebar on wide screens, drawer plus bottom tab bar (Home, Transactions, Insights, Menu) on phones and tablets. Each screen has its own address (`#/transactions`, `#/insights`, `#/calendar`, `#/tools`, `#/whats-new`, `#/about`), so the browser's Back button works.
+- **Navigation shared with the other isaymotion apps:** dark top bar with ☰ menu, back/forward buttons (Alt+Left / Alt+Right), search, text size (Aa) and theme; docked sidebar on wide screens, drawer plus bottom tab bar (Home, Transactions, Insights, Menu) on phones and tablets. Each screen has its own address (`#/transactions`, `#/insights`, `#/calendar`, `#/budget`, `#/pay-me`, `#/tools`, `#/whats-new`, `#/about`), so the browser's Back button works.
 - **What's new page** with an unseen-changes badge, and an **About** page with theme and text size settings.
 - **Responsive garden theme:** light, dark, or match device; no third-party libraries or external runtime requests.
 
