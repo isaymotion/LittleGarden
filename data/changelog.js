@@ -5,6 +5,14 @@
    and "Latest version" in the footer of index.html. */
 window.APP_CHANGELOG = [
   {
+    version: '2.2.0',
+    date: '2026-11-16',
+    title: 'Clothes and Books categories',
+    items: [
+      { type: 'feature', text: 'Two new categories, 👗 Clothes and 📖 Books, in the Lifestyle & other spending area. They appear in the entry form, filters, charts, budgets and recurring expenses. Expenses you already saved keep their category; tap Edit to move one.' }
+    ]
+  },
+  {
     version: '2.1.1',
     date: '2026-11-16',
     title: 'Date boxes fit on iPhone',

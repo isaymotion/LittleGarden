@@ -1,7 +1,7 @@
 /* Offline support: network first, cached copy when offline. Bump VERSION on every publish.
    Cache names MUST start with this app's PREFIX: all isaymotion apps share one origin and one cache storage. */
 const PREFIX = "little-garden-";
-const VERSION = PREFIX + "2.1.1";
+const VERSION = PREFIX + "2.2.0";
 const CORE = ["./", "./index.html", "./styles.css", "./app.js", "./data/app-meta.js", "./data/changelog.js", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/apple-touch-icon.png", "./icons/favicon-32.png", "./app-icon.png", "./welcome-banner.jpg"];
 self.addEventListener("install", (event) => {
   // add() one by one so a single missing file cannot make the whole install fail

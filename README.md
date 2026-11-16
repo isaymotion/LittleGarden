@@ -1,12 +1,12 @@
 # Little Garden — Monthly Expense Tracker
 
-A mobile-first, garden-inspired monthly expense tracker for GitHub Pages. Records use Philippine pesos (PHP), with 12 fixed categories, search, monthly reports, charts, CSV/JSON backup and restore, and optional install/offline support.
+A mobile-first, garden-inspired monthly expense tracker for GitHub Pages. Records use Philippine pesos (PHP), with 14 fixed categories, search, monthly reports, charts, CSV/JSON backup and restore, and optional install/offline support.
 
 ## Features
 
 - **Local-first storage:** expenses are saved in this browser using `localStorage`; no account or server/database is needed.
 - **Entry fields:** date, item/description, price in PHP, fixed category, and optional notes.
-- **12 fixed categories:** Groceries; Restaurants & Dining; Medications & Healthcare; Property & Real Estate; Utilities & Internet; Pets; Transportation; Shopping & Personal Care; Hobbies & Entertainment; Education & Professional Development; Gifts & Donations; Miscellaneous.
+- **14 fixed categories:** Groceries; Restaurants & Dining; Medications & Healthcare; Property & Real Estate; Utilities & Internet; Pets; Transportation; Shopping & Personal Care; Clothes; Hobbies & Entertainment; Education & Professional Development; Books; Gifts & Donations; Miscellaneous.
 - **Home dashboard:** quick expense entry, monthly summary, and the five most recent transactions; select a recent item to jump to its matching transaction.
 - **Insights:** monthly totals, category and area charts, daily spending, comparisons, calendar, and yearly trends.
 - **Transactions:** searchable, filterable, sortable history with edit and delete actions; shown as cards on phones.
@@ -30,7 +30,7 @@ A mobile-first, garden-inspired monthly expense tracker for GitHub Pages. Record
 | Daily living | Groceries, Restaurants & Dining, Utilities & Internet |
 | Health & care | Medications & Healthcare, Pets, Shopping & Personal Care |
 | Property & transport | Property & Real Estate, Transportation |
-| Lifestyle & other | Hobbies & Entertainment, Education & Professional Development, Gifts & Donations, Miscellaneous |
+| Lifestyle & other | Clothes, Hobbies & Entertainment, Education & Professional Development, Books, Gifts & Donations, Miscellaneous |
 
 ## Run locally
 
