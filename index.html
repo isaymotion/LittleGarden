@@ -101,7 +101,7 @@
 </div>
 <p aria-live="polite" class="form-message" id="formMessage" role="status"></p>
 </form>
-</section><section aria-label="Monthly summary" class="summary-grid">
+</section><div id="homePayMe"></div><section aria-label="Monthly summary" class="summary-grid">
 <article class="summary-card total-card">
 <span class="summary-label">Spent this month</span>
 <strong class="summary-value" id="monthTotal">₱0.00</strong>
@@ -273,7 +273,7 @@
   </div>
 </div>
 
-<div class="tool-item"><span class="tool-icon">↗</span><div><h3>Export records</h3><p>Save a full JSON backup or a spreadsheet-friendly CSV file.</p><div class="tool-buttons"><button class="button button-outline" id="exportCsvBtn" type="button">Export CSV</button><button class="button button-outline" id="exportJsonBtn2" type="button">Export JSON backup</button></div></div></div>
+<div class="tool-item"><span class="tool-icon">↗</span><div><h3>Export records</h3><p>Save a full JSON backup (it includes your Pay me QR codes) or a spreadsheet-friendly CSV file.</p><div class="tool-buttons"><button class="button button-outline" id="exportCsvBtn" type="button">Export CSV</button><button class="button button-outline" id="exportJsonBtn2" type="button">Export JSON backup</button></div></div></div>
 <div class="tool-item"><span class="tool-icon">↙</span><div><h3>Restore a backup</h3><p>Import a JSON backup or CSV. You can replace records or merge them.</p><div class="tool-buttons"><label class="button button-outline file-button" for="importFile">Choose file</label><input accept=".json,.csv,application/json,text/csv" hidden="" id="importFile" type="file"/><select aria-label="Import mode" id="importMode"><option value="merge">Merge with current records</option><option value="replace">Replace all records</option></select></div><p aria-live="polite" class="form-message" id="importMessage" role="status"></p><button class="button button-quiet hidden" id="undoImportBtn" type="button">Undo last import</button></div></div>
 <div class="tool-item hidden" id="installTool"><span class="tool-icon">⤓</span><div><h3>Install on this device</h3><p>Add Little Garden to your home screen so it opens like an app and works offline.</p><div class="tool-buttons"><button class="button button-outline" id="installBtn" type="button">Install app</button></div></div></div>
 <div class="tool-item"><span class="tool-icon">♡</span><div><h3>Private by design</h3><p>Your entries stay in this browser using local storage. No account or server is required. Export backups regularly, especially before clearing browser data.</p></div></div>
@@ -311,6 +311,10 @@
 <p aria-live="polite" class="form-message mini-wide" id="incomeMessage" role="status"></p>
 </form>
 <div class="recent-transaction-list" id="incomeList"></div>
+</section></div>
+<div class="page-view" data-view="pay-me" hidden="" id="payMeView"><section aria-labelledby="payMeTitle" class="panel pay-panel">
+<div class="section-heading"><div><p class="eyebrow">SHARE THE HARVEST</p><h2 id="payMeTitle">Pay me</h2><p class="chart-subtitle">Your GCash, Maya and bank QR codes, ready to show or send when someone pays you back. Saved only on this device, and included in your JSON backup.</p></div><span aria-hidden="true" class="leaf-badge">❀</span></div>
+<div id="payMeBody"><p class="chart-subtitle">Loading your QR codes…</p></div>
 </section></div>
 <div class="page-view" data-view="whats-new" hidden="" id="newsView"></div>
 <div class="page-view" data-view="about" hidden="" id="aboutView"></div>

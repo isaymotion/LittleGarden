@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const STORAGE_KEY = "little-garden-expenses-v1";
-  const KEYS = {views:"little-garden-saved-views",lastCategory:"little-garden-last-category",theme:"little-garden-theme",textSize:"little-garden-text-size",navCollapsed:"little-garden-nav-collapsed",seenNews:"little-garden-seen-news",importUndo:"little-garden-import-undo",lastBackup:"little-garden-last-backup",recovery:"little-garden-expenses-recovery",budgets:"little-garden-budgets",recurring:"little-garden-recurring",income:"little-garden-income-v1",lastMethod:"little-garden-last-method",backupSnooze:"little-garden-backup-snooze"};
+  const KEYS = {views:"little-garden-saved-views",lastCategory:"little-garden-last-category",theme:"little-garden-theme",textSize:"little-garden-text-size",navCollapsed:"little-garden-nav-collapsed",seenNews:"little-garden-seen-news",importUndo:"little-garden-import-undo",lastBackup:"little-garden-last-backup",recovery:"little-garden-expenses-recovery",budgets:"little-garden-budgets",recurring:"little-garden-recurring",income:"little-garden-income-v1",lastMethod:"little-garden-last-method",backupSnooze:"little-garden-backup-snooze",payMe:"little-garden-pay-me-v1"};
   const METHODS = ["Cash","GCash","Card","Bank transfer","Other"];
   const NO_METHOD = "Not set";
   const methodColors = {"Cash":"#80a878","GCash":"#8099c5","Card":"#d98d8b","Bank transfer":"#e7b66c","Other":"#b7a2d3","Not set":"#a9b0a2"};
@@ -133,7 +133,8 @@
     renderAll();
     initShell();
     if(loadWarning) $("formMessage").textContent=loadWarning;
-    if("serviceWorker" in navigator && location.protocol!=="file:") navigator.serviceWorker.register("./sw.js").catch(err=>console.warn("Offline cache unavailable",err));
+    initPayMe();
+    initUpdates();
   }
   function bindEvents(){
     $("expenseForm").addEventListener("submit",onSave);
@@ -522,8 +523,8 @@
     const last=isoStamp(lsGet(KEYS.lastBackup)||""),count=`${expenses.length} ${expenses.length===1?"expense":"expenses"} on this device.`;
     $("backupMeta").textContent=last?`${count} Last backup exported ${new Date(last).toLocaleDateString("en-PH",{month:"long",day:"numeric",year:"numeric"})}.`:`${count} No backup exported from this device yet.`;
   }
-  function exportJSON(){
-    const payload={app:"Little Garden Expense Tracker",schemaVersion:1,appVersion:META.version,currency:"PHP",exportedAt:new Date().toISOString(),categories:categoryNames,expenses,...snapshotExtras()};
+  async function exportJSON(){
+    const payload={app:"Little Garden Expense Tracker",schemaVersion:1,appVersion:META.version,currency:"PHP",exportedAt:new Date().toISOString(),categories:categoryNames,expenses,...snapshotExtras(),payMe:await payMeForBackup()};
     downloadFile(`little-garden-expenses-${localDate()}.json`,JSON.stringify(payload,null,2),"application/json;charset=utf-8");
     lsSet(KEYS.lastBackup,payload.exportedAt);renderBackupMeta();
   }
@@ -731,8 +732,9 @@
       if(!saveExpenses()){expenses=previous;return;}
       if(extras)applyImportedExtras(extras,merge);
       renderAll();
-      const parts=[`${added} added`];if(updated)parts.push(`${updated} updated`);if(skipped)parts.push(`${skipped} already here`);
-      message.textContent=merge?`Import finished: ${parts.join(", ")}.`:`Replaced your records with ${result.length} from the file.`;
+      const payCount=extras&&extras.payMe?await applyImportedPayMe(extras.payMe,merge):0;
+      const parts=[`${added} added`];if(updated)parts.push(`${updated} updated`);if(skipped)parts.push(`${skipped} already here`);if(payCount)parts.push(`${payCount} Pay me ${payCount===1?"account":"accounts"} restored`);
+      message.textContent=merge?`Import finished: ${parts.join(", ")}.`:`Replaced your records with ${result.length} from the file.${payCount?` ${payCount} Pay me ${payCount===1?"account":"accounts"} restored.`:""}`;
       if(!snapshotSaved)message.textContent+=" There was not enough browser storage to keep an undo copy.";
       message.style.color="var(--deep)";
     }catch(err){message.textContent=`Import failed: ${err.message}`;message.style.color="#a84943";}
@@ -947,6 +949,326 @@
   }
 
   /* =====================================================================================
+     Version 2.3: Pay me. QR codes and account details to show or send when someone pays her back.
+     Details live in localStorage (KEYS.payMe). The pictures live in IndexedDB, because every
+     isaymotion app shares one origin and its small (~5 MB) localStorage. Both travel in the JSON backup.
+     ===================================================================================== */
+  const PAY_ACCOUNTS = [
+    {id:"gcash",name:"GCash",kind:"E-wallet",color:"#1f63d6",numberLabel:"GCash number"},
+    {id:"maya",name:"Maya (PayMaya)",kind:"E-wallet",color:"#0f9d6b",numberLabel:"Maya number"},
+    {id:"maribank",name:"MariBank",kind:"Bank",color:"#e8662a"},
+    {id:"bpi",name:"BPI",kind:"Bank",color:"#b3242a"},
+    {id:"mayabank",name:"Maya Bank",kind:"Bank",color:"#127a57"},
+    {id:"unionbank",name:"UnionBank",kind:"Bank",color:"#e07b00"},
+    {id:"securitybank",name:"Security Bank",kind:"Bank",color:"#1787c6"},
+    {id:"metrobank",name:"Metrobank",kind:"Bank",color:"#24408e"}
+  ];
+  const PAY_DB = "little-garden-pay-me", PAY_STORE = "qr";
+  let payMeta = {};            // {gcash:{name,number,note,updatedAt}, ...}
+  const payQr = {};            // account id -> picture as a data URL (from IndexedDB)
+  let payEditing = "";         // account whose editor is open
+  let payDraftQr = null;       // picture picked in the open editor: null = unchanged, "" = remove, else data URL
+  let payReady = false, payProblem = "";
+  let payLoaded = Promise.resolve();
+  const payAccount = id => PAY_ACCOUNTS.find(a=>a.id===id);
+  const paySaved = id => !!(payQr[id] || (payMeta[id] && (payMeta[id].name || payMeta[id].number)));
+  const payInitials = a => a.name.replace(/\(.*?\)/g,"").split(/\s+/).filter(Boolean).map(w=>w[0]).join("").slice(0,2).toUpperCase();
+  const payBadge = (a,extra="") => `<span class="pay-badge${extra}" aria-hidden="true" style="--pay:${a.color}">${payInitials(a)}</span>`;
+  const isQrDataUrl = v => typeof v==="string" && /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length<8e6;
+  const canShareFiles = (() => { try { return !!(navigator.canShare && navigator.share && navigator.canShare({files:[new File(["x"],"qr.jpg",{type:"image/jpeg"})]})); } catch(e) { return false; } })();
+
+  function cleanPayMeta(v){
+    const out={};
+    if(!v||typeof v!=="object")return out;
+    PAY_ACCOUNTS.forEach(a=>{
+      const r=v[a.id];if(!r||typeof r!=="object")return;
+      out[a.id]={name:String(r.name||"").trim().slice(0,80),number:String(r.number||"").trim().slice(0,40),note:String(r.note||"").trim().slice(0,160),updatedAt:isoStamp(r.updatedAt||"")||""};
+    });
+    return out;
+  }
+  function savePayMeta(){
+    const keep={};Object.keys(payMeta).forEach(id=>{if(paySaved(id))keep[id]=payMeta[id];});
+    payMeta=keep;
+    return lsSet(KEYS.payMe,JSON.stringify(payMeta));
+  }
+
+  /* ----- IndexedDB: one store, key = account id, value = data URL ----- */
+  function payDb(){
+    if(!window.indexedDB)return Promise.reject(new Error("This browser cannot store pictures."));
+    if(!payDb.open)payDb.open=new Promise((resolve,reject)=>{
+      let req;try{req=indexedDB.open(PAY_DB,1);}catch(e){payDb.open=null;reject(new Error("Picture storage is not available here."));return;}
+      req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains(PAY_STORE))req.result.createObjectStore(PAY_STORE);};
+      req.onsuccess=()=>resolve(req.result);
+      req.onerror=()=>{payDb.open=null;reject(new Error("Picture storage is not available here."));};
+    });
+    return payDb.open;
+  }
+  async function payTx(mode,work){
+    const db=await payDb();
+    return new Promise((resolve,reject)=>{
+      const tx=db.transaction(PAY_STORE,mode);work(tx.objectStore(PAY_STORE));
+      tx.oncomplete=()=>resolve();
+      tx.onerror=tx.onabort=()=>{const err=tx.error;reject(new Error(err&&err.name==="QuotaExceededError"?"There is not enough space on this device to save the picture.":"The picture could not be saved."));};
+    });
+  }
+  const qrPut = (id,url) => payTx("readwrite",st=>st.put(url,id));
+  const qrDel = id => payTx("readwrite",st=>st.delete(id));
+  async function loadPayQr(){
+    try{
+      await payTx("readonly",st=>PAY_ACCOUNTS.forEach(a=>{const r=st.get(a.id);r.onsuccess=()=>{if(isQrDataUrl(r.result))payQr[a.id]=r.result;else delete payQr[a.id];};}));
+    }catch(e){payProblem=`${e.message} Your account names and numbers still work.`;}
+  }
+
+  /* ----- A chosen picture is scaled down (longest side 1400 px) and saved as a JPEG on white ----- */
+  function readQrPicture(file){
+    return new Promise((resolve,reject)=>{
+      if(!file)return reject(new Error("No picture was chosen."));
+      if(file.type&&!/^image\//.test(file.type))return reject(new Error("Please choose a picture, such as a screenshot of your QR code."));
+      if(file.size>25*1024*1024)return reject(new Error("That picture is larger than 25 MB."));
+      const src=URL.createObjectURL(file),img=new Image();
+      img.onload=()=>{
+        try{
+          const scale=Math.min(1,1400/Math.max(img.naturalWidth,img.naturalHeight,1));
+          const w=Math.max(1,Math.round(img.naturalWidth*scale)),h=Math.max(1,Math.round(img.naturalHeight*scale));
+          const c=document.createElement("canvas");c.width=w;c.height=h;
+          const ctx=c.getContext("2d");ctx.fillStyle="#ffffff";ctx.fillRect(0,0,w,h);ctx.imageSmoothingQuality="high";ctx.drawImage(img,0,0,w,h);
+          resolve(c.toDataURL("image/jpeg",0.92));
+        }catch(e){reject(new Error("That picture could not be read."));}
+        finally{URL.revokeObjectURL(src);}
+      };
+      img.onerror=()=>{URL.revokeObjectURL(src);reject(new Error("That picture could not be opened. Try a PNG or JPG screenshot."));};
+      img.src=src;
+    });
+  }
+  function dataUrlToFile(url,name){
+    const comma=url.indexOf(","),mime=(url.slice(0,comma).match(/data:([^;]+)/)||[])[1]||"image/jpeg",bin=atob(url.slice(comma+1));
+    const bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+    return new File([bytes],name,{type:mime});
+  }
+  async function copyText(text,btn){
+    let ok=false;
+    try{await navigator.clipboard.writeText(text);ok=true;}
+    catch(e){const ta=document.createElement("textarea");ta.value=text;ta.setAttribute("readonly","");ta.style.cssText="position:fixed;top:0;opacity:0";document.body.appendChild(ta);ta.select();try{ok=document.execCommand("copy");}catch(_){}ta.remove();}
+    if(btn){const old=btn.dataset.label||btn.textContent;btn.dataset.label=old;btn.textContent=ok?"Copied":"Could not copy";setTimeout(()=>{btn.textContent=old;},1600);}
+  }
+  function sharePayQr(id){
+    const a=payAccount(id),url=payQr[id];if(!a||!url)return;
+    const m=payMeta[id]||{},file=dataUrlToFile(url,`${a.id}-qr.jpg`);
+    // Build the file before calling share(): iPhone only allows share() straight after the tap.
+    if(canShareFiles&&navigator.canShare({files:[file]})){
+      navigator.share({files:[file],title:`${a.name} QR code`,text:[a.name,m.name,m.number].filter(Boolean).join(" · ")}).catch(()=>{});
+      return;
+    }
+    const link=document.createElement("a");link.href=url;link.download=file.name;document.body.appendChild(link);link.click();link.remove();
+  }
+
+  /* ----- Pay me screen ----- */
+  function payPicHTML(id){
+    const pic=payDraftQr===null?payQr[id]:payDraftQr,a=payAccount(id);
+    return `<div class="pay-preview">${pic?`<img src="${pic}" alt="Chosen ${escapeHTML(a.name)} QR picture">`:"<span>No QR picture yet</span>"}</div>
+      <div class="pay-pic-actions"><label class="button button-outline pay-file">${pic?"Replace picture":"Choose QR picture"}<input type="file" accept="image/*" class="sr-only" data-pay-file="${id}"></label>${pic?`<button class="button button-quiet" type="button" data-pay-clearpic="${id}">Remove picture</button>`:""}</div>`;
+  }
+  function payEditorHTML(a){
+    const m=payMeta[a.id]||{},saved=paySaved(a.id);
+    return `<form class="pay-editor" data-pay-form="${a.id}" novalidate>
+      <div class="pay-pic" data-pay-pic="${a.id}">${payPicHTML(a.id)}</div>
+      <p class="pay-hint">Tip: in ${escapeHTML(a.name.replace(/\s*\(.*\)/,""))}, open your receive or QR screen, take a screenshot, then choose it here.</p>
+      <div><label for="payName-${a.id}">Name on the account</label><input id="payName-${a.id}" maxlength="80" autocomplete="off" value="${escapeHTML(m.name||"")}" placeholder="As it appears to the sender"></div>
+      <div><label for="payNumber-${a.id}">${escapeHTML(a.numberLabel||"Account number")}</label><input id="payNumber-${a.id}" maxlength="40" autocomplete="off" inputmode="numeric" value="${escapeHTML(m.number||"")}" placeholder="Optional"></div>
+      <div><label for="payNote-${a.id}">Note</label><input id="payNote-${a.id}" maxlength="160" autocomplete="off" value="${escapeHTML(m.note||"")}" placeholder="Optional, e.g. savings account"></div>
+      <div class="form-actions"><button class="button button-primary" type="submit">Save</button><button class="button button-quiet" type="button" data-pay-cancel>Cancel</button>${saved?`<button class="button button-quiet pay-remove" type="button" data-pay-remove="${a.id}">Remove ${escapeHTML(a.name)}</button>`:""}</div>
+      <p class="form-message" role="status" aria-live="polite" data-pay-msg></p>
+    </form>`;
+  }
+  function payCardHTML(a){
+    const m=payMeta[a.id]||{},qr=payQr[a.id],editing=payEditing===a.id;
+    const head=`<header class="pay-card__head">${payBadge(a)}<div><h3>${escapeHTML(a.name)}</h3><p>${escapeHTML(a.kind)}</p></div></header>`;
+    if(editing)return `<article class="pay-card is-editing" data-pay-card="${a.id}" style="--pay:${a.color}">${head}${payEditorHTML(a)}</article>`;
+    return `<article class="pay-card" data-pay-card="${a.id}" style="--pay:${a.color}">${head}
+      ${qr?`<button class="pay-qr" type="button" data-pay-show="${a.id}" aria-label="Show the ${escapeHTML(a.name)} QR code full screen"><img src="${qr}" alt="${escapeHTML(a.name)} QR code"></button>`:'<p class="pay-noqr">No QR picture yet. Tap Edit to add one.</p>'}
+      ${m.name||m.number?`<div class="pay-lines">${m.name?`<div class="pay-line"><span class="pay-label">Name</span><span class="pay-value">${escapeHTML(m.name)}</span></div>`:""}${m.number?`<div class="pay-line"><span class="pay-label">Number</span><span class="pay-value pay-num">${escapeHTML(m.number)}</span><button class="button button-quiet pay-copy" type="button" data-pay-copy="${a.id}" aria-label="Copy the ${escapeHTML(a.name)} number">Copy</button></div>`:""}</div>`:""}
+      ${m.note?`<p class="pay-note">${escapeHTML(m.note)}</p>`:""}
+      <div class="pay-actions">${qr?`<button class="button button-primary" type="button" data-pay-show="${a.id}">Show</button><button class="button button-outline" type="button" data-pay-share="${a.id}">${canShareFiles?"Share":"Save picture"}</button>`:""}<button class="button button-outline" type="button" data-pay-edit="${a.id}">Edit</button></div>
+    </article>`;
+  }
+  function renderPayMe(){
+    const body=$("payMeBody");if(!body)return;
+    if(!payReady){body.innerHTML='<p class="chart-subtitle">Loading your QR codes…</p>';return;}
+    const saved=PAY_ACCOUNTS.filter(a=>paySaved(a.id)),open=PAY_ACCOUNTS.filter(a=>!paySaved(a.id));
+    body.innerHTML=`${payProblem?`<p class="pay-problem" role="alert">${escapeHTML(payProblem)}</p>`:""}
+      ${saved.length?`<div class="pay-grid">${saved.map(payCardHTML).join("")}</div>`:'<div class="empty-state pay-empty"><span aria-hidden="true">🌱</span><h3>No accounts yet</h3><p>Pick one below and add its QR picture.</p></div>'}
+      ${open.length?`<h3 class="pay-subhead">${saved.length?"Add another account":"Add an account"}</h3><div class="pay-add-list">${open.map(a=>payEditing===a.id?payCardHTML(a):`<div class="pay-add-row" style="--pay:${a.color}">${payBadge(a)}<div class="pay-add-name"><strong>${escapeHTML(a.name)}</strong><span>${escapeHTML(a.kind)}</span></div><button class="button button-outline" type="button" data-pay-edit="${a.id}" aria-label="Add ${escapeHTML(a.name)}">Add</button></div>`).join("")}</div>`:""}`;
+    renderPayHome();
+  }
+  // Home: one tap from the front page to a full-screen QR code
+  function renderPayHome(){
+    const box=$("homePayMe");if(!box)return;
+    const list=PAY_ACCOUNTS.filter(a=>payQr[a.id]);
+    if(!list.length){box.innerHTML="";box.className="";return;}
+    box.className="panel pay-home";
+    box.innerHTML=`<div class="pay-home__top"><h2 class="pay-home__title">Pay me</h2><a class="pay-home__all" href="#/pay-me">All accounts</a></div><div class="pay-chips">${list.map(a=>`<button class="pay-chip" type="button" data-pay-show="${a.id}" aria-label="Show the ${escapeHTML(a.name)} QR code">${payBadge(a," pay-badge--sm")}<span>${escapeHTML(a.name)}</span></button>`).join("")}</div>`;
+  }
+  function openPayEditor(id){
+    payEditing=id;payDraftQr=null;renderPayMe();
+    const card=document.querySelector(`[data-pay-card="${id}"]`);
+    if(card){card.scrollIntoView({block:"start",behavior:"smooth"});const f=card.querySelector("input:not([type=file])");if(f)setTimeout(()=>f.focus({preventScroll:true}),250);}
+  }
+  function closePayEditor(){const id=payEditing;payEditing="";payDraftQr=null;renderPayMe();const back=document.querySelector(`[data-pay-card="${id}"] [data-pay-edit], .pay-add-row [data-pay-edit="${id}"]`);if(back)back.focus({preventScroll:true});}
+  async function savePayForm(form){
+    const id=form.dataset.payForm,a=payAccount(id),msg=form.querySelector("[data-pay-msg]");
+    const name=$(`payName-${id}`).value.trim(),number=$(`payNumber-${id}`).value.trim(),note=$(`payNote-${id}`).value.trim();
+    const pic=payDraftQr===null?payQr[id]||"":payDraftQr;
+    if(!pic&&!name&&!number){msg.textContent="Add a QR picture, a name or a number first.";msg.style.color="var(--bad)";return;}
+    try{
+      if(payDraftQr!==null){if(payDraftQr)await qrPut(id,payDraftQr);else await qrDel(id);}
+    }catch(e){msg.textContent=e.message;msg.style.color="var(--bad)";return;}
+    if(payDraftQr!==null){if(payDraftQr)payQr[id]=payDraftQr;else delete payQr[id];}
+    payMeta[id]={name,number,note,updatedAt:new Date().toISOString()};
+    const ok=savePayMeta();
+    payEditing="";payDraftQr=null;renderPayMe();
+    const card=document.querySelector(`[data-pay-card="${id}"]`);
+    if(card){card.classList.add("is-fresh");card.scrollIntoView({block:"nearest"});const b=card.querySelector("[data-pay-show],[data-pay-edit]");if(b)b.focus({preventScroll:true});}
+    if(!ok)alert(`${a.name} was saved, but the name and number could not be stored because this browser’s storage is full.`);
+  }
+  async function removePayAccount(id){
+    const a=payAccount(id);
+    if(!confirm(`Remove ${a.name} from Pay me? Its QR picture and details will be deleted from this device.`))return;
+    try{await qrDel(id);}catch(e){}
+    delete payQr[id];delete payMeta[id];savePayMeta();
+    payEditing="";payDraftQr=null;renderPayMe();
+  }
+  function bindPayMe(){
+    const view=$("payMeView");
+    view.addEventListener("click",e=>{
+      const t=e.target.closest("button");if(!t)return;
+      if(t.dataset.payEdit)openPayEditor(t.dataset.payEdit);
+      else if("payCancel" in t.dataset)closePayEditor();
+      else if(t.dataset.payRemove)removePayAccount(t.dataset.payRemove);
+      else if(t.dataset.payShare)sharePayQr(t.dataset.payShare);
+      else if(t.dataset.payCopy)copyText((payMeta[t.dataset.payCopy]||{}).number||"",t);
+      else if(t.dataset.payClearpic){payDraftQr="";const box=view.querySelector(`[data-pay-pic="${t.dataset.payClearpic}"]`);if(box)box.innerHTML=payPicHTML(t.dataset.payClearpic);}
+    });
+    view.addEventListener("change",async e=>{
+      const input=e.target.closest("[data-pay-file]");if(!input)return;
+      const id=input.dataset.payFile,form=input.closest("form"),msg=form&&form.querySelector("[data-pay-msg]");
+      try{payDraftQr=await readQrPicture(input.files&&input.files[0]);if(msg){msg.textContent="Picture ready. Tap Save to keep it.";msg.style.color="var(--deep)";}}
+      catch(err){if(msg){msg.textContent=err.message;msg.style.color="var(--bad)";}return;}
+      const box=view.querySelector(`[data-pay-pic="${id}"]`);if(box)box.innerHTML=payPicHTML(id);
+    });
+    view.addEventListener("submit",e=>{const form=e.target.closest("[data-pay-form]");if(!form)return;e.preventDefault();savePayForm(form);});
+    document.addEventListener("click",e=>{const t=e.target.closest("[data-pay-show]");if(t)openPayViewer(t.dataset.payShow);});
+  }
+
+  /* ----- Full-screen viewer: white card, big QR code, swipe-free Previous/Next between saved codes ----- */
+  let payViewing = "", payViewerReturn = null;
+  function payViewer(){
+    let v=$("payViewer");if(v)return v;
+    v=document.createElement("div");v.id="payViewer";v.className="pay-viewer";v.hidden=true;
+    v.setAttribute("role","dialog");v.setAttribute("aria-modal","true");v.setAttribute("aria-labelledby","payViewerTitle");
+    v.innerHTML=`<div class="pay-viewer__card"><div class="pay-viewer__top"><h2 id="payViewerTitle"></h2><button class="pay-viewer__close" type="button" data-pv="close" aria-label="Close">✕</button></div>
+      <img class="pay-viewer__img" alt=""><p class="pay-viewer__name"></p><div class="pay-viewer__numrow"><p class="pay-viewer__num"></p><button class="button pay-viewer__btn" type="button" data-pv="copy">Copy number</button></div><p class="pay-viewer__note"></p>
+      <div class="pay-viewer__nav"><button class="button pay-viewer__btn" type="button" data-pv="prev">‹ Previous</button><span class="pay-viewer__count"></span><button class="button pay-viewer__btn" type="button" data-pv="next">Next ›</button></div></div>`;
+    document.body.appendChild(v);
+    v.addEventListener("click",e=>{
+      const b=e.target.closest("[data-pv]");
+      if(e.target===v||b&&b.dataset.pv==="close")closePayViewer();
+      else if(b&&b.dataset.pv==="prev")stepPayViewer(-1);
+      else if(b&&b.dataset.pv==="next")stepPayViewer(1);
+      else if(b&&b.dataset.pv==="copy")copyText((payMeta[payViewing]||{}).number||"",b);
+    });
+    document.addEventListener("keydown",e=>{
+      if(v.hidden)return;
+      if(e.key==="Escape"){e.preventDefault();closePayViewer();}
+      else if(e.key==="ArrowLeft")stepPayViewer(-1);
+      else if(e.key==="ArrowRight")stepPayViewer(1);
+      else if(e.key==="Tab"){const f=[...v.querySelectorAll("button:not([hidden])")].filter(x=>x.offsetParent!==null);if(!f.length)return;const i=f.indexOf(document.activeElement);if(e.shiftKey&&i<=0){e.preventDefault();f[f.length-1].focus();}else if(!e.shiftKey&&i===f.length-1){e.preventDefault();f[0].focus();}}
+    });
+    window.addEventListener("hashchange",()=>closePayViewer(false));
+    return v;
+  }
+  function paintPayViewer(){
+    const v=payViewer(),a=payAccount(payViewing),m=payMeta[payViewing]||{},list=PAY_ACCOUNTS.filter(x=>payQr[x.id]),i=list.findIndex(x=>x.id===payViewing);
+    v.querySelector(".pay-viewer__card").style.setProperty("--pay",a.color);
+    v.querySelector("h2").innerHTML=`${payBadge(a," pay-badge--sm")} ${escapeHTML(a.name)}`;
+    const img=v.querySelector("img");img.src=payQr[payViewing];img.alt=`${a.name} QR code`;
+    const name=v.querySelector(".pay-viewer__name");name.textContent=m.name||"";name.hidden=!m.name;
+    v.querySelector(".pay-viewer__num").textContent=m.number||"";v.querySelector(".pay-viewer__numrow").hidden=!m.number;
+    const note=v.querySelector(".pay-viewer__note");note.textContent=m.note||"";note.hidden=!m.note;
+    v.querySelector(".pay-viewer__nav").hidden=list.length<2;
+    v.querySelector(".pay-viewer__count").textContent=`${i+1} of ${list.length}`;
+  }
+  function openPayViewer(id){
+    if(!payQr[id])return;
+    payViewerReturn=document.activeElement;payViewing=id;
+    const v=payViewer();paintPayViewer();v.hidden=false;document.body.classList.add("pay-viewer-open");
+    v.querySelector("[data-pv=close]").focus();
+  }
+  function stepPayViewer(dir){
+    const list=PAY_ACCOUNTS.filter(x=>payQr[x.id]);if(list.length<2)return;
+    const i=list.findIndex(x=>x.id===payViewing);payViewing=list[(i+dir+list.length)%list.length].id;paintPayViewer();
+  }
+  function closePayViewer(restoreFocus=true){
+    const v=$("payViewer");if(!v||v.hidden)return;
+    v.hidden=true;document.body.classList.remove("pay-viewer-open");payViewing="";
+    if(restoreFocus&&payViewerReturn&&document.contains(payViewerReturn))payViewerReturn.focus({preventScroll:true});
+  }
+
+  /* ----- Backup: the JSON file carries every saved account, picture included ----- */
+  async function payMeForBackup(){
+    await payLoaded;
+    const accounts={};
+    PAY_ACCOUNTS.forEach(a=>{if(!paySaved(a.id))return;const m=payMeta[a.id]||{};accounts[a.id]={name:m.name||"",number:m.number||"",note:m.note||"",updatedAt:m.updatedAt||"",qr:payQr[a.id]||""};});
+    return {accounts};
+  }
+  // Older backups have no payMe section and change nothing here. On merge, accounts already on this device win.
+  async function applyImportedPayMe(section,merge){
+    if(!section||typeof section!=="object"||!section.accounts||typeof section.accounts!=="object")return 0;
+    await payLoaded;
+    const meta=cleanPayMeta(section.accounts);let count=0;
+    for(const a of PAY_ACCOUNTS){
+      const m=meta[a.id];if(!m)continue;
+      if(merge&&paySaved(a.id))continue;
+      const qr=isQrDataUrl(section.accounts[a.id].qr)?section.accounts[a.id].qr:"";
+      if(!qr&&!m.name&&!m.number)continue;
+      try{if(qr)await qrPut(a.id,qr);else await qrDel(a.id);}catch(e){continue;}
+      if(qr)payQr[a.id]=qr;else delete payQr[a.id];
+      payMeta[a.id]=m;count++;
+    }
+    savePayMeta();renderPayMe();
+    return count;
+  }
+  function initPayMe(){
+    payMeta=cleanPayMeta(readJSON(KEYS.payMe));
+    bindPayMe();
+    payLoaded=loadPayQr().then(()=>{payReady=true;renderPayMe();});
+  }
+
+  /* =====================================================================================
+     Version 2.3: updates arrive without reinstalling. An installed iPhone app resumes instead of
+     reloading, so it checks for a new version each time it comes back to the screen, and reloads once
+     when the new version takes over (later, if she is in the middle of typing).
+     ===================================================================================== */
+  function initUpdates(){
+    if(!("serviceWorker" in navigator)||location.protocol==="file:")return;
+    const sw=navigator.serviceWorker;
+    let hadController=!!sw.controller;   // the very first install takes over without a reload; every later version reloads
+    let reloading=false,waiting=false,lastCheck=Date.now();
+    const busy=()=>{
+      const el=document.activeElement,tag=(el&&el.tagName||"").toLowerCase();
+      return payEditing||tag==="input"||tag==="textarea"||tag==="select"||!!($("expenseId").value||$("expenseItem").value.trim()||$("expensePrice").value);
+    };
+    const reload=()=>{if(reloading)return;reloading=true;location.reload();};
+    sw.addEventListener("controllerchange",()=>{if(!hadController){hadController=true;return;}if(busy())waiting=true;else reload();});
+    sw.register("./sw.js",{updateViaCache:"none"}).then(reg=>{
+      document.addEventListener("visibilitychange",()=>{
+        if(document.visibilityState==="hidden"){if(waiting)reload();return;}
+        if(Date.now()-lastCheck<30000)return;
+        lastCheck=Date.now();reg.update().catch(()=>{});
+      });
+    }).catch(err=>console.warn("Offline cache unavailable",err));
+  }
+
+  /* =====================================================================================
      App shell, shared with the other isaymotion apps: ☰ menu (docked sidebar on wide screens,
      drawer on phones and tablets), back/forward buttons, top-bar search, text size, theme,
      bottom tab bar, What's new and About. Screens are the .page-view blocks in index.html;
@@ -954,6 +1276,7 @@
      ===================================================================================== */
   const ROUTES = {
     home:{title:"",label:"Home",icon:"home",group:"Start"},
+    "pay-me":{title:"Pay me",label:"Pay me",icon:"qr",group:"Start"},
     transactions:{title:"Transactions",label:"Transactions",icon:"list",group:"Your spending"},
     insights:{title:"Insights",label:"Insights",icon:"pie",group:"Your spending"},
     calendar:{title:"Calendar",label:"Calendar",icon:"calendar",group:"Your spending"},
@@ -971,6 +1294,7 @@
     tools:'<path d="M12 3v11m0 0l-4-4m4 4l4-4M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/>',
     wallet:'<path d="M4 7a2 2 0 0 1 2-2h11v3M4 7v10a2 2 0 0 0 2 2h13a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1H6a2 2 0 0 1-2-1zM16.5 13.5h.01"/>',
     news:'<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h6M9 16h6"/>',
+    qr:'<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 20h.01M20 14v.01"/>',
     info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
     external:'<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'
   };
@@ -1177,6 +1501,7 @@
         <li>On Insights, tap a chart slice, a top expense or a heatmap square to open the matching entries.</li>
         <li>On Calendar, tap a day to see it, then add an expense for that day.</li>
         <li>Set a monthly budget, recurring expenses and income in <a href="#/budget">Budget and income</a>. Home then shows how the month is going.</li>
+        <li>Keep your GCash, Maya and bank QR codes in <a href="#/pay-me">Pay me</a>. Tap Show to put one full screen for scanning, or Share to send it in a chat.</li>
         <li>Start typing a description you have used before and pick it from the list. The category fills in for you.</li>
         <li>To install on iPhone or iPad, open this page in Safari, tap Share, then Add to Home Screen.</li>
       </ul>
@@ -1194,6 +1519,7 @@
     if(name==="whats-new")renderNews();
     if(name==="about")renderAbout();
     if(name==="budget")fillBudgetForm(true);
+    if(name==="pay-me")renderPayMe();
     document.querySelectorAll(".page-view").forEach(view=>{const on=view.dataset.view===name;view.hidden=!on;view.classList.toggle("is-active",on);});
     const title=name==="missing"?"Page not found":ROUTES[name].title;
     document.title=title?`${title} — Little Garden`:"Little Garden — Expense Tracker";

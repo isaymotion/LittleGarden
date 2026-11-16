@@ -3,7 +3,7 @@ window.APP_META = {
   name: 'Little Garden',
   short: 'Little Garden',
   tagline: 'Monthly expense journal',
-  version: '2.2.0',
+  version: '2.3.0',
   repo: 'LittleGarden',
   attribution: 'App created by Isabella Navarro, MD. Latest version November 2026. isaymotion@gmail.com'
 };

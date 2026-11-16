@@ -5,6 +5,16 @@
    and "Latest version" in the footer of index.html. */
 window.APP_CHANGELOG = [
   {
+    version: '2.3.0',
+    date: '2026-11-16',
+    title: 'Pay me, and updates that arrive on their own',
+    items: [
+      { type: 'feature', text: 'Pay me: save the QR codes of your GCash, Maya, MariBank, BPI, Maya Bank, UnionBank, Security Bank and Metrobank accounts, with the account name and number. Show one full screen for scanning, copy the number, or share the picture in a chat. They stay on this device and are included in your JSON backup.', href: '#/pay-me' },
+      { type: 'feature', text: 'Once you have saved a QR code, Home shows a Pay me row so any code is one tap away.' },
+      { type: 'correction', text: 'Updates now reach the installed app on their own. Little Garden checks for a new version each time you come back to it and refreshes itself once, never while you are typing.' }
+    ]
+  },
+  {
     version: '2.2.0',
     date: '2026-11-16',
     title: 'Clothes and Books categories',
