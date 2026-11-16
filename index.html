@@ -1,42 +1,74 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
-<meta content="#315b43" name="theme-color"/>
-<meta content="A private, offline-friendly monthly expense tracker in Philippine pesos." name="description"/>
 <title>Little Garden — Expense Tracker</title>
+<meta content="A private, offline-friendly monthly expense tracker in Philippine pesos." name="description"/>
+<meta content="Isabella Navarro, MD" name="author"/>
+<meta content="#315b43" name="theme-color"/>
+<meta content="yes" name="apple-mobile-web-app-capable"/>
+<meta content="yes" name="mobile-web-app-capable"/>
+<meta content="Little Garden" name="apple-mobile-web-app-title"/>
+<meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"/>
 <link href="manifest.webmanifest" rel="manifest"/>
-<link href="app-icon.png" rel="icon" type="image/png"/>
+<link href="icons/favicon-32.png" rel="icon" sizes="32x32" type="image/png"/>
+<link href="icons/icon-192.png" rel="icon" sizes="192x192" type="image/png"/>
+<link href="icons/apple-touch-icon.png" rel="apple-touch-icon"/>
 <link href="styles.css" rel="stylesheet"/>
+<!-- Runs before first paint: theme (light / dark / match device), text size, sidebar state. -->
+<script>
+(function () {
+  var d = document.documentElement, mode = "auto";
+  try { var t = localStorage.getItem("little-garden-theme"); if (t === "light" || t === "dark") mode = t; } catch (e) {}
+  var dark = mode === "dark" || (mode === "auto" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  d.setAttribute("data-theme", dark ? "dark" : "light");
+  d.setAttribute("data-theme-mode", mode);
+  try { var z = localStorage.getItem("little-garden-text-size"); if (z === "90" || z === "112.5" || z === "125") d.style.fontSize = z + "%"; } catch (e) {}
+  try { if (localStorage.getItem("little-garden-nav-collapsed") === "1") d.classList.add("nav-collapsed"); } catch (e) {}
+})();
+</script>
 </head>
 <body>
-<div class="app-shell">
+<a class="skip" href="#main">Skip to content</a>
+
 <header class="topbar">
-<a aria-label="Little Garden home" class="brand" href="#">
-<span aria-hidden="true" class="brand-mark">❀</span>
-<span><strong>Little Garden</strong><small>Monthly expense journal</small></span>
+<div class="topbar__inner">
+<button aria-controls="sidenav" aria-expanded="false" aria-label="Open menu" class="icon-btn menu-btn" id="menu-btn" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.2"/></svg></button>
+<button aria-controls="sidenav" aria-label="Hide the sidebar" class="icon-btn collapse-btn" id="collapse-btn" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><rect fill="none" height="15" rx="3" stroke="currentColor" stroke-width="2" width="17" x="3.5" y="4.5"/><path d="M9.5 5v14" stroke="currentColor" stroke-width="2"/></svg></button>
+<div aria-label="Page history" class="histnav" role="group">
+<button aria-label="Back" class="hist-btn" disabled="" id="nav-back" title="Back (Alt+Left)" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4"/></svg></button>
+<button aria-label="Forward" class="hist-btn" disabled="" id="nav-fwd" title="Forward (Alt+Right)" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4"/></svg></button>
+</div>
+<a aria-label="Little Garden, home" class="brand" href="#/">
+<img alt="" height="34" src="icons/icon-192.png" width="34"/>
+<span class="brand__name">Little Garden <span class="brand__sub">Monthly expense journal</span></span>
 </a>
-<div class="top-actions">
-<button aria-label="Switch to dark mode" class="button button-outline" id="themeToggle" title="Switch theme" type="button">🌙 Dark mode</button>
-<button class="button button-quiet hidden" id="installBtn" type="button">Install app</button>
-<button class="button button-outline" id="exportJsonBtn" type="button">Backup</button>
+<div class="search" role="search">
+<label class="sr-only" for="q">Search your expenses</label>
+<svg aria-hidden="true" class="search__icon" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" fill="none" r="5.5" stroke="currentColor" stroke-width="2"/><path d="M13 13l4.5 4.5" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg>
+<input autocomplete="off" id="q" placeholder="Search your expenses" spellcheck="false" type="search"/>
+<kbd aria-hidden="true" class="search__kbd">/</kbd>
+</div>
+<button aria-controls="textSizePanel" aria-expanded="false" aria-label="Text size" class="icon-btn text-size-btn" id="textSizeBtn" title="Text size" type="button"><span aria-hidden="true">A<small>A</small></span></button>
+<button aria-label="Theme: Match device" class="icon-btn theme-btn" id="theme-btn" title="Theme: Match device" type="button"></button>
 </div>
 </header>
-<nav aria-label="Main sections" class="section-nav" id="mainNavigation"><button aria-current="page" class="section-tab is-active" data-page="home" type="button"><span class="nav-icon" aria-hidden="true">⌂</span><span>Home</span></button><button aria-current="false" class="section-tab" data-page="journal" type="button"><span class="nav-icon" aria-hidden="true">☷</span><span>Transactions</span></button><button aria-current="false" class="section-tab" data-page="reports" type="button"><span class="nav-icon" aria-hidden="true">◒</span><span>Insights</span></button><button aria-current="false" class="section-tab" data-page="tools" type="button"><span class="nav-icon" aria-hidden="true">⚙</span><span>Tools</span></button></nav><main>
 
+<div class="shell">
+<aside aria-label="Main menu" class="sidenav" id="sidenav">
+<div class="sidenav__head"><span class="sidenav__title">Menu</span>
+<button aria-label="Close menu" class="icon-btn sidenav__close" id="nav-close" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.2"/></svg></button></div>
+<nav aria-label="Screens" class="sidenav__body" id="sidenav-body"></nav>
+</aside>
+<div class="nav-backdrop" hidden="" id="nav-backdrop"></div>
 
-
-
-
-
-
-
-
-<div class="page-view is-active" data-view="home" id="homeView"><section aria-label="Welcome to Little Garden Expense Tracker" class="welcome panel">
+<div class="content">
+<main class="app-main" id="main" tabindex="-1">
+<noscript><p>Little Garden needs JavaScript turned on to run.</p></noscript>
+<div class="page-view" data-view="home" id="homeView" hidden=""><section aria-label="Welcome to Little Garden Expense Tracker" class="welcome panel">
 <img alt="Welcome to Little Garden Expense Tracker, illustrated with a flower garden and church in pixel art" class="welcome-banner" src="welcome-banner.jpg"/>
-</section><section aria-labelledby="entryTitle" class="panel entry-panel">
+</section><div class="home-notices" id="homeNotices"></div><section aria-labelledby="entryTitle" class="panel entry-panel">
 <div class="section-heading">
 <div><p class="eyebrow">ADD TO YOUR JOURNAL</p><h2 id="entryTitle">New expense</h2></div>
 <span aria-hidden="true" class="leaf-badge">✦</span>
@@ -46,7 +78,8 @@
 <label for="expenseDate">Date</label>
 <input id="expenseDate" name="date" required="" type="date"/>
 <label for="expenseItem">Item or description</label>
-<input id="expenseItem" maxlength="120" name="item" placeholder="e.g. Weekend groceries" required="" type="text"/>
+<input autocomplete="off" id="expenseItem" list="itemSuggestions" maxlength="120" name="item" placeholder="e.g. Weekend groceries" required="" type="text"/>
+<datalist id="itemSuggestions"></datalist>
 <div class="field-row">
 <div class="field-grow">
 <label for="expensePrice">Price (PHP)</label>
@@ -56,8 +89,12 @@
 <label for="expenseCategory">Category</label>
 <select id="expenseCategory" name="category" required=""></select>
 </div>
+<div class="field-grow field-method">
+<label for="expenseMethod">Paid with <span class="optional">(optional)</span></label>
+<select id="expenseMethod" name="method"></select>
 </div>
-<details class="optional-fields"><summary>Optional details <span class="optional">— add notes</span></summary><label for="expenseNotes">Notes <span class="optional">(optional)</span></label><textarea id="expenseNotes" maxlength="500" name="notes" placeholder="A little context, if useful…" rows="2"></textarea></details>
+</div>
+<details class="optional-fields" id="optionalFields"><summary>Notes <span class="optional">(optional)</span></summary><label for="expenseNotes">Notes <span class="optional">(optional)</span></label><textarea id="expenseNotes" maxlength="500" name="notes" placeholder="A little context, if useful…" rows="2"></textarea></details>
 <div class="form-actions">
 <button class="button button-primary" id="saveExpenseBtn" type="submit">Add expense</button>
 <button class="button button-quiet hidden" id="cancelEditBtn" type="button">Cancel edit</button>
@@ -78,30 +115,34 @@
 <article class="summary-card">
 <span class="summary-label">Daily average</span>
 <strong class="summary-value" id="dailyAverage">₱0.00</strong>
-<span class="summary-note">Based on days elapsed</span>
+<span class="summary-note">Based on days so far this month</span>
 </article>
+</section><section aria-labelledby="budgetHomeTitle" class="panel budget-panel">
+<div class="section-heading"><div><p class="eyebrow">ROOM TO GROW</p><h2 id="budgetHomeTitle">Budget this month</h2></div><a class="button button-outline" href="#/budget">Budget and income</a></div>
+<div id="budgetHome"></div>
+</section><section aria-labelledby="dueTitle" class="panel due-panel hidden" id="duePanel">
+<div class="section-heading"><div><p class="eyebrow">REGULAR WATERING</p><h2 id="dueTitle">Recurring this month</h2><p class="chart-subtitle">Tap Add when you have paid one. It is recorded on its usual day.</p></div></div>
+<div class="recent-transaction-list" id="dueList"></div>
 </section><section aria-labelledby="recentTitle" class="panel recent-panel">
 <div class="section-heading"><div><p class="eyebrow">JUST ADDED TO YOUR GARDEN</p><h2 id="recentTitle">Recent transactions</h2><p class="chart-subtitle">A quick look at your latest entries.</p></div><button class="button button-outline" id="viewAllTransactionsBtn" type="button">View all</button></div>
 <div class="recent-transaction-list" id="recentTransactions"><div class="recent-empty">Your recent expenses will appear here.</div></div>
 </section><section aria-labelledby="comparisonTitle" class="panel comparison-panel">
 <div class="section-heading"><div><p class="eyebrow">GENTLE MONTHLY REFLECTION</p><h2 id="comparisonTitle">Month-to-month</h2></div><span aria-hidden="true" class="leaf-badge">↗</span></div>
 <div class="comparison-grid">
-<article><span class="summary-label">Previous month</span><strong class="summary-value" id="previousMonthTotal">₱0.00</strong><span class="summary-note" id="previousMonthLabel">Previous month</span></article>
-<article><span class="summary-label">Change in spending</span><strong class="summary-value" id="monthChange">—</strong><span class="summary-note" id="monthChangeNote">Compared with previous month</span></article>
+<article><span class="summary-label">Last month</span><strong class="summary-value" id="previousMonthTotal">₱0.00</strong><span class="summary-note" id="previousMonthLabel">Previous month</span></article>
+<article><span class="summary-label">Change in spending</span><strong class="summary-value" id="monthChange">—</strong><span class="summary-note" id="monthChangeNote">This month compared with last month</span></article>
 <article><span class="summary-label">Previous daily average</span><strong class="summary-value" id="previousDailyAverage">₱0.00</strong><span class="summary-note">Previous month</span></article>
 </div>
 <div aria-label="Category changes compared with previous month" class="category-comparison" id="categoryComparison"></div>
-</section></div><div class="page-view" data-view="reports" hidden="" id="reportsView"><section aria-labelledby="reportTitle" class="panel report-panel">
+</section></div><div class="page-view" data-view="insights" hidden="" id="reportsView"><section aria-labelledby="reportTitle" class="panel report-panel">
 <div class="section-heading report-heading">
 <div><p class="eyebrow">YOUR SPENDING, AT A GLANCE</p><h2 id="reportTitle">Spending insights</h2><p class="chart-subtitle">Explore category patterns, daily totals, and longer-term trends.</p></div>
-<label class="month-picker-label" for="reportMonth">Month
-              <input id="reportMonth" type="month"/>
-</label>
+<div class="month-stepper"><button class="button button-outline month-step" data-month-step="-1" type="button" aria-label="Previous month">‹</button><label class="month-picker-label" for="reportMonth">Month<input id="reportMonth" type="month"/></label><button class="button button-outline month-step" data-month-step="1" type="button" aria-label="Next month">›</button></div>
 </div>
 <div class="chart-grid">
 <article class="chart-card">
 <h3>By category</h3>
-<p class="chart-subtitle">All 12 categories</p>
+<p class="chart-subtitle">The 12 categories</p>
 <div aria-label="Pie chart of spending by category" class="chart-wrap" id="categoryChart" role="img"></div>
 <div class="legend" id="categoryLegend"></div>
 </article>
@@ -111,13 +152,19 @@
 <div aria-label="Pie chart of spending by broader area" class="chart-wrap" id="areaChart" role="img"></div>
 <div class="legend" id="areaLegend"></div>
 </article>
+<article class="chart-card">
+<h3>By payment method</h3>
+<p class="chart-subtitle">How you paid</p>
+<div aria-label="Pie chart of spending by payment method" class="chart-wrap" id="methodChart" role="img"></div>
+<div class="legend" id="methodLegend"></div>
+</article>
 </div>
 <article class="chart-card bar-card">
 <div><h3>Daily spending</h3><p class="chart-subtitle">Daily totals for the selected month</p></div>
 <div aria-label="Bar chart of daily spending" class="bar-chart" id="dailyChart" role="img"></div>
 </article>
 </section><section aria-labelledby="insightsTitle" class="panel insights-panel">
-<div class="section-heading"><div><p class="eyebrow">PATTERNS, NOT PRESSURE</p><h2 id="insightsTitle">Spending insights</h2></div><span aria-hidden="true" class="leaf-badge">✧</span></div>
+<div class="section-heading"><div><p class="eyebrow">PATTERNS, NOT PRESSURE</p><h2 id="insightsTitle">Patterns and trends</h2></div><span aria-hidden="true" class="leaf-badge">✧</span></div>
 <div class="insights-grid">
 <article class="chart-card insight-card">
 <div class="insight-heading"><div><h3>Top expenses</h3><p class="chart-subtitle">Largest entries in the selected month</p></div><label class="compact-select-label">Show <select aria-label="Number of top expenses" id="topExpenseLimit"><option value="5">Top 5</option><option value="10">Top 10</option></select></label></div>
@@ -148,13 +195,15 @@
 </form>
 <div aria-live="polite" class="date-range-results" id="dateRangeResults"><p class="chart-subtitle">Choose two periods and compare their totals, daily averages, and category changes.</p></div>
 </article>
-<p class="chart-subtitle insight-footnote">Tip: tap a category or spending-area segment in either pie chart to open its matching transactions.</p>
-</section><section aria-labelledby="calendarTitle" class="panel calendar-panel">
-<div class="section-heading"><div><p class="eyebrow">YOUR MONTH IN LITTLE MOMENTS</p><h2 id="calendarTitle">Spending calendar</h2></div><div class="calendar-actions"><button class="button button-primary hidden" id="addOnSelectedDayBtn" type="button">Add expense on this day</button><button class="button button-quiet hidden" id="clearCalendarDate" type="button">Clear selected day</button></div></div>
-<p class="calendar-hint">Choose a day to see its expenses in the journal. Amounts appear on days with recorded spending.</p>
+<p class="chart-subtitle insight-footnote">Tip: tap a category or spending-area segment in either pie chart to open its matching transactions. Tap a heatmap square to open that day.</p>
+</section></div><div class="page-view" data-view="calendar" hidden="" id="calendarView"><section aria-labelledby="calendarTitle" class="panel calendar-panel">
+<div class="section-heading report-heading"><div><p class="eyebrow">YOUR MONTH IN LITTLE MOMENTS</p><h2 id="calendarTitle">Spending calendar</h2><p class="chart-subtitle">Tap a day to see what you spent. Amounts appear on days with recorded spending.</p></div>
+<div class="month-stepper"><button class="button button-outline month-step" data-month-step="-1" type="button" aria-label="Previous month">‹</button><label class="month-picker-label" for="calendarMonth">Month<input id="calendarMonth" type="month"/></label><button class="button button-outline month-step" data-month-step="1" type="button" aria-label="Next month">›</button></div></div>
 <div aria-label="Monthly spending calendar" class="calendar-grid" id="calendarGrid"></div>
 <p aria-live="polite" class="calendar-selection" id="calendarSelection" role="status">No day selected.</p>
-</section></div><div class="page-view" data-view="journal" hidden="" id="journalView"><section aria-labelledby="transactionsTitle" class="panel transactions-panel">
+<div class="calendar-day-list" id="calendarDayList"></div>
+<div class="calendar-actions"><button class="button button-primary hidden" id="addOnSelectedDayBtn" type="button">Add expense on this day</button><button class="button button-outline hidden" id="openDayInJournalBtn" type="button">Open in Transactions</button><button class="button button-quiet hidden" id="clearCalendarDate" type="button">Clear selected day</button></div>
+</section></div><div class="page-view" data-view="transactions" hidden="" id="journalView"><section aria-labelledby="transactionsTitle" class="panel transactions-panel">
 <div class="section-heading transaction-heading">
 <div><p class="eyebrow">YOUR RECORDS</p><h2 id="transactionsTitle">Transactions</h2><p class="chart-subtitle">Search, filter, sort, edit, or remove any recorded expense.</p></div>
 <span class="count-pill" id="allCount">0 entries</span>
@@ -163,6 +212,7 @@
 <label for="savedViewSelect">Saved views</label>
 <select aria-label="Apply a saved view" id="savedViewSelect"><option value="">Choose a view…</option><option value="this-month">This month</option><option value="healthcare">Healthcare</option><option value="largest">Largest expenses</option><option value="all">All records</option></select>
 <button class="button button-outline" id="saveViewBtn" type="button">Save current view</button>
+<button class="button button-quiet hidden" id="deleteViewBtn" type="button">Delete this view</button>
 <button class="button button-quiet" id="resetFiltersBtn" type="button">Reset filters</button>
 </div>
 <div class="toolbar">
@@ -174,6 +224,7 @@
 <option value="price-desc">Highest price</option><option value="price-asc">Lowest price</option><option value="item-asc">Description A–Z</option><option value="item-desc">Description Z–A</option>
 </select>
 </div>
+<p class="date-chip hidden" id="journalDateChip"><span id="journalDateLabel"></span><button aria-label="Clear the day filter" class="icon-button" id="clearJournalDate" type="button">×</button></p>
 <div class="table-wrap">
 <table>
 <thead><tr><th>Date</th><th>Item</th><th>Category</th><th class="amount-col">Price</th><th class="actions-col">Actions</th></tr></thead>
@@ -183,7 +234,7 @@
 </div>
 <div class="table-footer"><span id="filteredSummary">Showing 0 entries</span><strong id="filteredTotal">₱0.00</strong></div>
 </section></div><div class="page-view" data-view="tools" hidden="" id="toolsView"><section class="panel tools-panel">
-<div class="section-heading"><div><p class="eyebrow">YOUR DATA, YOURS TO KEEP</p><h2>Garden tools</h2></div></div>
+<div class="section-heading"><div><p class="eyebrow">YOUR DATA, YOURS TO KEEP</p><h2 id="toolsTitle">Tools and backup</h2></div></div>
 <div class="tools-grid">
 <div class="tool-item pdf-export-tool">
   <span class="tool-icon">▤</span>
@@ -222,28 +273,82 @@
   </div>
 </div>
 
-<div class="tool-item"><span class="tool-icon">↗</span><div><h3>Export records</h3><p>Save a full JSON backup or a spreadsheet-friendly CSV file.</p><div class="tool-buttons"><button class="button button-outline" id="exportCsvBtn" type="button">Export CSV</button><button class="button button-outline" id="exportJsonBtn2" type="button">Export JSON</button></div></div></div>
-<div class="tool-item"><span class="tool-icon">↙</span><div><h3>Restore a backup</h3><p>Import a JSON backup or CSV. You can replace records or merge them.</p><div class="tool-buttons"><label class="button button-outline file-button" for="importFile">Choose file</label><input accept=".json,.csv,application/json,text/csv" hidden="" id="importFile" type="file"/><select aria-label="Import mode" id="importMode"><option value="merge">Merge with current records</option><option value="replace">Replace all records</option></select></div><p aria-live="polite" class="form-message" id="importMessage" role="status"></p></div></div>
+<div class="tool-item"><span class="tool-icon">↗</span><div><h3>Export records</h3><p>Save a full JSON backup or a spreadsheet-friendly CSV file.</p><div class="tool-buttons"><button class="button button-outline" id="exportCsvBtn" type="button">Export CSV</button><button class="button button-outline" id="exportJsonBtn2" type="button">Export JSON backup</button></div></div></div>
+<div class="tool-item"><span class="tool-icon">↙</span><div><h3>Restore a backup</h3><p>Import a JSON backup or CSV. You can replace records or merge them.</p><div class="tool-buttons"><label class="button button-outline file-button" for="importFile">Choose file</label><input accept=".json,.csv,application/json,text/csv" hidden="" id="importFile" type="file"/><select aria-label="Import mode" id="importMode"><option value="merge">Merge with current records</option><option value="replace">Replace all records</option></select></div><p aria-live="polite" class="form-message" id="importMessage" role="status"></p><button class="button button-quiet hidden" id="undoImportBtn" type="button">Undo last import</button></div></div>
+<div class="tool-item hidden" id="installTool"><span class="tool-icon">⤓</span><div><h3>Install on this device</h3><p>Add Little Garden to your home screen so it opens like an app and works offline.</p><div class="tool-buttons"><button class="button button-outline" id="installBtn" type="button">Install app</button></div></div></div>
 <div class="tool-item"><span class="tool-icon">♡</span><div><h3>Private by design</h3><p>Your entries stay in this browser using local storage. No account or server is required. Export backups regularly, especially before clearing browser data.</p></div></div>
 <div class="tool-item"><span class="tool-icon">☼</span><div><h3>Daily rhythm</h3><p>Use the date field to log expenses as you go. Your daily chart and monthly summary update automatically.</p></div></div>
 </div>
-</section></div><footer class="app-footer"><span>Made for mindful money moments <span aria-hidden="true">✿</span></span><span>PHP · Local storage · Offline-friendly</span><span class="attribution">App created by Isabella Navarro, MD. Latest version October 2026. <a href="mailto:isaymotion@gmail.com">isaymotion@gmail.com</a></span></footer></main>
+</section></div><div class="page-view" data-view="budget" hidden="" id="budgetView"><section aria-labelledby="budgetTitle" class="panel">
+<div class="section-heading"><div><p class="eyebrow">ROOM TO GROW</p><h2 id="budgetTitle">Monthly budget</h2><p class="chart-subtitle">Set a total, a limit for any category, or both. Leave a box empty for no limit. Home shows how the month is going.</p></div><span aria-hidden="true" class="leaf-badge">❦</span></div>
+<form id="budgetForm">
+<div class="budget-grid">
+<div class="budget-field budget-field-total"><label for="budgetOverall">Total for the month</label><div class="price-input"><span>₱</span><input id="budgetOverall" inputmode="decimal" max="999999999" min="0" placeholder="No limit" step="0.01" type="number"/></div></div>
+<div class="budget-fields" id="budgetCategoryFields"></div>
 </div>
+<div class="form-actions"><button class="button button-primary" type="submit">Save budget</button><button class="button button-quiet" id="clearBudgetBtn" type="button">Clear all limits</button></div>
+<p aria-live="polite" class="form-message" id="budgetMessage" role="status"></p>
+</form>
+</section><section aria-labelledby="recurringTitle" class="panel">
+<div class="section-heading"><div><p class="eyebrow">REGULAR WATERING</p><h2 id="recurringTitle">Recurring expenses</h2><p class="chart-subtitle">Rent, internet, subscriptions. Each month they wait on Home until you tap Add.</p></div></div>
+<form class="mini-form" id="recurringForm">
+<div class="mini-field mini-wide"><label for="recurringItem">Item or description</label><input id="recurringItem" maxlength="120" placeholder="e.g. Internet" required="" type="text"/></div>
+<div class="mini-field"><label for="recurringPrice">Price (PHP)</label><div class="price-input"><span>₱</span><input id="recurringPrice" inputmode="decimal" max="999999999" min="0.01" placeholder="0.00" required="" step="0.01" type="number"/></div></div>
+<div class="mini-field"><label for="recurringDay">Day of the month</label><input id="recurringDay" inputmode="numeric" max="31" min="1" required="" step="1" type="number" value="1"/></div>
+<div class="mini-field"><label for="recurringCategory">Category</label><select id="recurringCategory" required=""></select></div>
+<div class="mini-field"><label for="recurringMethod">Paid with</label><select id="recurringMethod"></select></div>
+<div class="form-actions mini-wide"><button class="button button-primary" type="submit">Add recurring expense</button></div>
+<p aria-live="polite" class="form-message mini-wide" id="recurringMessage" role="status"></p>
+</form>
+<div class="recent-transaction-list" id="recurringList"></div>
+</section><section aria-labelledby="incomeTitle" class="panel">
+<div class="section-heading"><div><p class="eyebrow">WHAT COMES IN</p><h2 id="incomeTitle">Income</h2><p class="chart-subtitle">Optional. Record what you receive to see what is left after spending.</p></div><span class="count-pill" id="incomeMonthTotal">₱0.00 this month</span></div>
+<form class="mini-form" id="incomeForm">
+<div class="mini-field"><label for="incomeDate">Date</label><input id="incomeDate" required="" type="date"/></div>
+<div class="mini-field"><label for="incomeAmount">Amount (PHP)</label><div class="price-input"><span>₱</span><input id="incomeAmount" inputmode="decimal" max="999999999" min="0.01" placeholder="0.00" required="" step="0.01" type="number"/></div></div>
+<div class="mini-field mini-wide"><label for="incomeSource">Source</label><input id="incomeSource" maxlength="120" placeholder="e.g. Salary" required="" type="text"/></div>
+<div class="form-actions mini-wide"><button class="button button-primary" type="submit">Add income</button></div>
+<p aria-live="polite" class="form-message mini-wide" id="incomeMessage" role="status"></p>
+</form>
+<div class="recent-transaction-list" id="incomeList"></div>
+</section></div>
+<div class="page-view" data-view="whats-new" hidden="" id="newsView"></div>
+<div class="page-view" data-view="about" hidden="" id="aboutView"></div>
+<div class="page-view" data-view="missing" hidden="" id="missingView"><section class="panel"><div class="empty-state"><span aria-hidden="true">🍃</span><h3>That page is not here</h3><p>The link may be old. Everything else is one tap away.</p><p><a class="button button-primary" href="#/">Go to Home</a></p></div></section></div>
+</main>
+
+<footer class="site-foot">
+<div class="site-foot__inner">
+<p class="foot-links"><a href="#/whats-new">What’s new <span class="badge" data-badge="news" hidden=""></span></a><a href="#/about">About</a><a href="#/tools">Tools and backup</a></p>
+<section aria-labelledby="backup-title" class="backup" id="backup">
+<div class="backup__head">
+<svg aria-hidden="true" class="backup__icon" viewBox="0 0 24 24"><path d="M12 3v11m0 0l-4-4m4 4l4-4M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+<div><h2 class="backup__title" id="backup-title">Back up your data</h2>
+<p class="backup__text">Your expenses, budget, recurring items and income live only in this browser. Export a backup file to keep them safe, then restore it on another phone, tablet or computer from Tools and backup.</p></div>
+</div>
+<div class="backup__actions">
+<button class="btn backup__btn" id="exportJsonBtn" type="button">Export backup</button>
+<a class="btn backup__btn" href="#/tools">Restore a backup</a>
+</div>
+<p class="backup__meta" id="backupMeta"></p>
+</section>
+<p class="attribution">App created by Isabella Navarro, MD. Latest version November 2026. <a href="mailto:isaymotion@gmail.com">isaymotion@gmail.com</a></p>
+<p class="disclaimer">A personal record-keeping tool in Philippine pesos. Not connected to any bank, and not financial advice.</p>
+</div>
+</footer>
+</div>
+</div>
+
+<nav aria-label="Quick navigation" class="tabbar">
+<a data-tab="home" href="#/"><svg aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg><span>Home</span></a>
+<a data-tab="transactions" href="#/transactions"><svg aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg><span>Transactions</span></a>
+<a data-tab="insights" href="#/insights"><svg aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg><span>Insights</span></a>
+<button aria-controls="sidenav" aria-expanded="false" data-tab="menu" id="tab-menu" type="button"><svg aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Menu</span><span class="badge" data-badge="news" hidden=""></span></button>
+</nav>
+
 <div aria-live="polite" class="undo-toast" hidden="" id="undoToast" role="status"><span id="undoMessage">Expense deleted.</span><button class="button button-outline" id="undoDeleteBtn" type="button">Undo</button></div>
+<script src="data/app-meta.js"></script>
+<script src="data/changelog.js"></script>
 <script src="app.js"></script>
-<script>
-(() => {
-  const tabs = [...document.querySelectorAll('.section-tab')];
-  const views = [...document.querySelectorAll('.page-view')];
-  function showPage(name) {
-    tabs.forEach(tab => { const active = tab.dataset.page === name; tab.classList.toggle('is-active', active); tab.setAttribute('aria-current', active ? 'page' : 'false'); });
-    views.forEach(view => { const active = view.dataset.view === name; view.hidden = !active; view.classList.toggle('is-active', active); });
-    window.scrollTo({top: 0, behavior: 'auto'});
-  }
-  tabs.forEach(tab => tab.addEventListener('click', () => showPage(tab.dataset.page)));
-  window.addEventListener('hashchange', () => { const target = location.hash.slice(1); if (['home','journal','reports','tools'].includes(target)) showPage(target); });
-  document.querySelector('.brand')?.addEventListener('click', event => { event.preventDefault(); showPage('home'); });
-})();
-</script>
 </body>
 </html>

@@ -9,13 +9,19 @@ A mobile-first, garden-inspired monthly expense tracker for GitHub Pages. Record
 - **12 fixed categories:** Groceries; Restaurants & Dining; Medications & Healthcare; Property & Real Estate; Utilities & Internet; Pets; Transportation; Shopping & Personal Care; Hobbies & Entertainment; Education & Professional Development; Gifts & Donations; Miscellaneous.
 - **Home dashboard:** quick expense entry, monthly summary, and the five most recent transactions; select a recent item to jump to its matching transaction.
 - **Insights:** monthly totals, category and area charts, daily spending, comparisons, calendar, and yearly trends.
-- **Transactions:** searchable, filterable, sortable history with edit and delete actions.
+- **Transactions:** searchable, filterable, sortable history with edit and delete actions; shown as cards on phones.
 - **Find records:** text search, category/month filters, and sort options.
 - **Backup/restore:** JSON backup and CSV export; imports validate records, support merge/replace, and show useful errors.
 - **PDF report export:** printable weekly, monthly, or yearly reports with spreadsheet-style (default) and visual layouts, charts, insights, and all transactions.
+- **Budget and income:** a monthly total and optional per-category limits with progress bars on Home; recurring expenses that wait on Home each month until added or skipped; optional income entries with "left after spending".
+- **Payment method:** optional Cash / GCash / Card / Bank transfer / Other on each expense, a chart by payment method, and a `method` column in the CSV.
+- **Faster entry:** description suggestions from past entries fill in the category and payment method.
+- **Backup reminder:** shown on Home when the last export is more than 30 days old.
 - **PWA:** manifest, app icon, install prompt where supported, and a service worker for offline app-shell caching.
 - **Quick expense entry:** the form sits directly below the garden banner, with compact mobile spacing and comfortable touch targets.
-- **Responsive garden theme:** works on mobile and desktop; persistent iPhone bottom navigation with Home, Transactions, Insights, and Tools; no third-party libraries or external runtime requests.
+- **Navigation shared with the other isaymotion apps:** dark top bar with ☰ menu, back/forward buttons (Alt+Left / Alt+Right), search, text size (Aa) and theme; docked sidebar on wide screens, drawer plus bottom tab bar (Home, Transactions, Insights, Menu) on phones and tablets. Each screen has its own address (`#/transactions`, `#/insights`, `#/calendar`, `#/tools`, `#/whats-new`, `#/about`), so the browser's Back button works.
+- **What's new page** with an unseen-changes badge, and an **About** page with theme and text size settings.
+- **Responsive garden theme:** light, dark, or match device; no third-party libraries or external runtime requests.
 
 ### Four spending areas
 
@@ -45,6 +51,11 @@ Then open <http://localhost:8000> in your browser.
    - `index.html`
    - `styles.css`
    - `app.js`
+   - `data/app-meta.js`
+   - `data/changelog.js`
+   - `icons/` (`icon-192.png`, `apple-touch-icon.png`, `favicon-32.png`)
+   - `app-icon.png`
+   - `welcome-banner.jpg`
    - `manifest.webmanifest`
    - `sw.js`
    - `icon.svg`
@@ -61,19 +72,26 @@ If you deploy to a project site (a repository other than `YOUR-USERNAME.github.i
 
 - Your expense records are stored in the browser profile on the device where you enter them. They do not automatically sync between devices or browsers.
 - Clearing browser site data can erase your entries. **Export JSON backups regularly.**
-- CSV is intended for spreadsheet portability. JSON preserves record IDs and metadata and is the preferred full-fidelity backup.
-- During import, **Merge** adds/updates records by ID; **Replace** replaces the current records with the imported file. CSV files that do not include IDs receive generated IDs, so repeated imports of the same CSV may create duplicate records.
+- CSV is intended for spreadsheet portability. JSON preserves record IDs and metadata, plus saved views, budget, recurring expenses and income, and is the preferred full-fidelity backup.
+- During import, **Merge** adds/updates records by ID; **Replace** asks first, then replaces the current records with the imported file. CSV rows without IDs are matched on date, item, price, category and notes, so importing the same CSV twice does not create duplicates. **Undo last import** restores the records you had before the most recent import.
 - Imported data is validated. The fixed category names must match exactly. Keep a backup before replacing records.
 - The service worker caches the app shell for offline loading after the app has been opened online at least once. Browser storage and offline behavior vary by browser.
 - This is a personal record-keeping tool, not a bank-connected app or financial advice service.
 
 ## Updating the app
 
-After changing files, commit and push them to the `main` branch. If a service worker cache makes an older version appear, bump `CACHE_NAME` in `sw.js` (for example, `little-garden-v2`) so clients install the new shell.
+For every release, change these together so they agree:
+
+1. Add an entry at the top of `data/changelog.js` (this is the What's new page).
+2. Set `version` in `data/app-meta.js`.
+3. Set `VERSION` in `sw.js` (for example `PREFIX + "2.0.1"`), so phones pick up the new files.
+4. Update "Latest version <Month YYYY>" in the footer of `index.html` and in `data/app-meta.js`.
+
+Then commit and push to the `main` branch. The service worker only ever deletes caches whose names start with `little-garden-`, because all isaymotion apps share one site and one cache storage.
 
 ## Dark mode and search
 
-- Use the **Dark mode / Light mode** button in the header. The chosen theme is saved locally in this browser and does not change expense data.
+- Use the theme button in the top bar to switch between match device, light and dark. The choice is saved locally in this browser and does not change expense data.
 - Search supports multiple words (all words must match) across description, notes, category, broader spending area, date in ISO or readable format, day/month, amount (including PHP-formatted amount), and record ID. You can combine search with the category and month filters.
 - Example searches: `groceries`, `2026-10`, `October 10 2026`, `Pets`, `Health & care`, or `250.00`.
 - The footer displays the requested creator attribution and email link.
@@ -83,4 +101,4 @@ After changing files, commit and push them to the `main` branch. If a service wo
 
 This build includes clickable category/spending-area pie chart segments and legend items, top 5/10 expenses, a yearly summary, category trends across 12 months, a daily spending heatmap, and comparisons between any two custom date ranges. Clicking a chart item filters the journal to the matching category or spending area for the selected month. Heatmap dates open the corresponding day in the journal.
 
-The welcome banner uses `welcome-banner.jpg`; the install/app icon uses `app-icon.png`. Both are cached for offline use. The icon and banner are included in the project ZIP.
+The welcome banner uses `welcome-banner.jpg`; the install/app icon uses `app-icon.png`, with smaller copies in `icons/` for the home screen and browser tab. All are cached for offline use.
