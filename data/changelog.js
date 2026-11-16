@@ -5,6 +5,22 @@
    and "Latest version" in the footer of index.html. */
 window.APP_CHANGELOG = [
   {
+    version: '2.4.0',
+    date: '2026-11-16',
+    title: 'Trips with yen, a quicker Home, and more ways to budget',
+    items: [
+      { type: 'feature', text: 'Trips: add a trip with its dates, its currency and your exchange rate. While you are away, new expenses join the trip on their own and you can type prices in that currency (yen, dollars, won and others). Each one is saved in pesos, so your monthly totals and budget stay right. Each trip shows its total, its daily average and its top categories.', href: '#/trips' },
+      { type: 'update', text: 'On phones, Home is shorter: the entry form now waits behind a round + button at the bottom right, so your budget, recurring items and recent entries come first. After you add an expense, a short message offers Undo.' },
+      { type: 'feature', text: 'Repeat an expense: tap ↻ beside a recent entry on Home, or on any entry in Transactions, to add it again for today.' },
+      { type: 'update', text: 'Budget bars turn amber and say “Getting close” once 80% of a limit is used, and each bar shows about how much is left to spend per day for the rest of the month.' },
+      { type: 'feature', text: 'Income now appears in the PDF report (income received, what was left, and your savings rate) and in Insights, with a new chart of income, spending and the share you kept each month.', href: '#/insights' },
+      { type: 'feature', text: 'Recurring expenses can now be weekly, every 3 months or yearly, as well as monthly. Good for insurance, subscriptions and yearly dues.', href: '#/budget' },
+      { type: 'feature', text: 'Your own payment methods: add a particular card or bank to the “Paid with” list, or take away the ones you never use. Expenses already saved keep the method they had.', href: '#/budget' },
+      { type: 'feature', text: 'Save to Files or iCloud: a new button in Tools and backup sends your full backup to the iPhone share sheet.', href: '#/tools' },
+      { type: 'update', text: 'Clothes now sits in the Health & care spending area, beside Shopping & Personal Care.' }
+    ]
+  },
+  {
     version: '2.3.1',
     date: '2026-11-16',
     title: 'GoTyme and BDO in Pay me',

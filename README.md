@@ -13,15 +13,19 @@ A mobile-first, garden-inspired monthly expense tracker for GitHub Pages. Record
 - **Find records:** text search, category/month filters, and sort options.
 - **Backup/restore:** JSON backup and CSV export; imports validate records, support merge/replace, and show useful errors.
 - **PDF report export:** printable weekly, monthly, or yearly reports with spreadsheet-style (default) and visual layouts, charts, insights, and all transactions.
-- **Budget and income:** a monthly total and optional per-category limits with progress bars on Home; recurring expenses that wait on Home each month until added or skipped; optional income entries with "left after spending".
-- **Payment method:** optional Cash / GCash / Card / Bank transfer / Other on each expense, a chart by payment method, and a `method` column in the CSV.
+- **Budget and income:** a monthly total and optional per-category limits with progress bars on Home (amber from 80% used, red when over, with an "about ₱X a day" figure for the days left); recurring expenses (weekly, monthly, every 3 months or yearly) that wait on Home when due until added or skipped; optional income entries with "left after spending". Income also appears in the PDF report and in an Insights chart of income, spending and savings rate by month.
+- **Payment method:** optional on each expense, from a list she can edit in Budget and income (starts as Cash / GCash / Card / Bank transfer / Other; stored under `little-garden-methods`). An expense keeps its method even after that method is taken off the list. There is a chart by payment method and a `method` column in the CSV.
+- **Trips:** a trip has a name, dates, a currency and an exchange rate (pesos for 1 unit). New expenses dated within a trip join it automatically, and on a trip abroad the price can be typed in that currency: it is saved in pesos (`price`) with the typed amount kept beside it (`fxAmount`, `fxCurrency`). Each trip shows its total, daily average and top categories, and Home shows a card while a trip is under way. Trips are stored under `little-garden-trips-v1` and travel in the JSON backup; the CSV has `trip`, `foreignAmount` and `foreignCurrency` columns.
+- **Repeat an expense:** the ↻ button on a recent entry or a transaction adds it again for today, with Undo.
+- **Phones:** the entry form waits behind a round + button, so Home starts with the summary, budget and recurring items.
+- **Save to Files or iCloud:** where the browser can share files, Tools and backup offers the JSON backup to the share sheet.
 - **Faster entry:** description suggestions from past entries fill in the category and payment method.
 - **Pay me:** save QR codes for GCash and Maya (PayMaya), and for BDO, BPI, GoTyme, MariBank, Maya Bank, Metrobank, Security Bank and UnionBank, with the name and number on each account. Show a code full screen (white card, readable in dark mode), copy the number, or share the picture. Pictures are kept in IndexedDB (`little-garden-pay-me` database), details in `localStorage`; both are in the JSON backup. Home shows a one-tap row once a code is saved.
 - **Automatic updates:** the installed app checks for a new version each time it returns to the screen and reloads once when one takes over (later if you are typing).
 - **Backup reminder:** shown on Home when the last export is more than 30 days old.
 - **PWA:** manifest, app icon, install prompt where supported, and a service worker for offline app-shell caching.
 - **Quick expense entry:** the form sits directly below the garden banner, with compact mobile spacing and comfortable touch targets.
-- **Navigation shared with the other isaymotion apps:** dark top bar with ☰ menu, back/forward buttons (Alt+Left / Alt+Right), search, text size (Aa) and theme; docked sidebar on wide screens, drawer plus bottom tab bar (Home, Transactions, Insights, Menu) on phones and tablets. Each screen has its own address (`#/transactions`, `#/insights`, `#/calendar`, `#/budget`, `#/pay-me`, `#/tools`, `#/whats-new`, `#/about`), so the browser's Back button works.
+- **Navigation shared with the other isaymotion apps:** dark top bar with ☰ menu, back/forward buttons (Alt+Left / Alt+Right), search, text size (Aa) and theme; docked sidebar on wide screens, drawer plus bottom tab bar (Home, Transactions, Insights, Menu) on phones and tablets. Each screen has its own address (`#/transactions`, `#/insights`, `#/calendar`, `#/budget`, `#/trips`, `#/pay-me`, `#/tools`, `#/whats-new`, `#/about`), so the browser's Back button works.
 - **What's new page** with an unseen-changes badge, and an **About** page with theme and text size settings.
 - **Responsive garden theme:** light, dark, or match device; no third-party libraries or external runtime requests.
 
@@ -30,9 +34,9 @@ A mobile-first, garden-inspired monthly expense tracker for GitHub Pages. Record
 | Spending area | Categories |
 |---|---|
 | Daily living | Groceries, Restaurants & Dining, Utilities & Internet |
-| Health & care | Medications & Healthcare, Pets, Shopping & Personal Care |
+| Health & care | Medications & Healthcare, Pets, Shopping & Personal Care, Clothes |
 | Property & transport | Property & Real Estate, Transportation |
-| Lifestyle & other | Clothes, Hobbies & Entertainment, Education & Professional Development, Books, Gifts & Donations, Miscellaneous |
+| Lifestyle & other | Hobbies & Entertainment, Education & Professional Development, Books, Gifts & Donations, Miscellaneous |
 
 ## Run locally
 
@@ -74,7 +78,7 @@ If you deploy to a project site (a repository other than `YOUR-USERNAME.github.i
 
 - Your expense records are stored in the browser profile on the device where you enter them. They do not automatically sync between devices or browsers.
 - Clearing browser site data can erase your entries. **Export JSON backups regularly.**
-- CSV is intended for spreadsheet portability. JSON preserves record IDs and metadata, plus saved views, budget, recurring expenses and income, and is the preferred full-fidelity backup.
+- CSV is intended for spreadsheet portability. JSON preserves record IDs and metadata, plus saved views, budget, recurring expenses, income, payment methods, trips and Pay me accounts, and is the preferred full-fidelity backup.
 - During import, **Merge** adds/updates records by ID; **Replace** asks first, then replaces the current records with the imported file. CSV rows without IDs are matched on date, item, price, category and notes, so importing the same CSV twice does not create duplicates. **Undo last import** restores the records you had before the most recent import.
 - Imported data is validated. The fixed category names must match exactly. Keep a backup before replacing records.
 - The service worker caches the app shell for offline loading after the app has been opened online at least once. Browser storage and offline behavior vary by browser.

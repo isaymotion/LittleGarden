@@ -1,16 +1,30 @@
 (() => {
   "use strict";
   const STORAGE_KEY = "little-garden-expenses-v1";
-  const KEYS = {views:"little-garden-saved-views",lastCategory:"little-garden-last-category",theme:"little-garden-theme",textSize:"little-garden-text-size",navCollapsed:"little-garden-nav-collapsed",seenNews:"little-garden-seen-news",importUndo:"little-garden-import-undo",lastBackup:"little-garden-last-backup",recovery:"little-garden-expenses-recovery",budgets:"little-garden-budgets",recurring:"little-garden-recurring",income:"little-garden-income-v1",lastMethod:"little-garden-last-method",backupSnooze:"little-garden-backup-snooze",payMe:"little-garden-pay-me-v1"};
-  const METHODS = ["Cash","GCash","Card","Bank transfer","Other"];
+  const KEYS = {views:"little-garden-saved-views",lastCategory:"little-garden-last-category",theme:"little-garden-theme",textSize:"little-garden-text-size",navCollapsed:"little-garden-nav-collapsed",seenNews:"little-garden-seen-news",importUndo:"little-garden-import-undo",lastBackup:"little-garden-last-backup",recovery:"little-garden-expenses-recovery",budgets:"little-garden-budgets",recurring:"little-garden-recurring",income:"little-garden-income-v1",lastMethod:"little-garden-last-method",backupSnooze:"little-garden-backup-snooze",payMe:"little-garden-pay-me-v1",methods:"little-garden-methods",trips:"little-garden-trips-v1"};
+  const DEFAULT_METHODS = ["Cash","GCash","Card","Bank transfer","Other"];
   const NO_METHOD = "Not set";
   const methodColors = {"Cash":"#80a878","GCash":"#8099c5","Card":"#d98d8b","Bank transfer":"#e7b66c","Other":"#b7a2d3","Not set":"#a9b0a2"};
-  const cleanMethod = value => { const v=String(value ?? "").trim().toLowerCase(); return METHODS.find(m=>m.toLowerCase()===v) || ""; };
+  const METHOD_PALETTE = ["#79b9c0","#c59b75","#df9fc0","#9a8ab8","#b9a04a","#e5a58e","#a6b9a0","#c47fa5"];
+  const FREQS = {monthly:"Monthly",weekly:"Weekly",quarterly:"Every 3 months",yearly:"Yearly"};
+  const WEEKDAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const META = window.APP_META || {name:"Little Garden",version:""};
   const CHANGELOG = Array.isArray(window.APP_CHANGELOG) ? window.APP_CHANGELOG : [];
   const lsGet = key => { try { return localStorage.getItem(key); } catch(e) { return null; } };
   const lsSet = (key,value) => { try { localStorage.setItem(key,value); return true; } catch(e) { return false; } };
   const lsDel = key => { try { localStorage.removeItem(key); } catch(e) {} };
+  /* Payment methods: her own list (version 2.4). An expense keeps whatever it was saved with, even after that method leaves the list. */
+  const tidyName = (value,max) => String(value ?? "").trim().replace(/\s+/g," ").slice(0,max);
+  function cleanMethods(v){
+    if(!Array.isArray(v))return [...DEFAULT_METHODS];
+    const out=[],seen=new Set();
+    v.forEach(x=>{const name=tidyName(x,30),key=name.toLowerCase();if(!name||key===NO_METHOD.toLowerCase()||seen.has(key))return;seen.add(key);out.push(name);});
+    return out.slice(0,20);
+  }
+  let METHODS = cleanMethods((()=>{ try { return JSON.parse(lsGet(KEYS.methods)); } catch(e) { return null; } })());
+  const cleanMethod = value => { const name=tidyName(value,30),key=name.toLowerCase(); if(!name||key===NO_METHOD.toLowerCase())return ""; return METHODS.find(m=>m.toLowerCase()===key) || name; };
+  const methodColor = name => methodColors[name] || METHOD_PALETTE[Math.abs([...String(name)].reduce((n,c)=>(n*31+c.charCodeAt(0))|0,7))%METHOD_PALETTE.length];
   const categories = [
     {name:"Groceries", icon:"🥬", area:"Daily living", color:"#80a878"},
     {name:"Restaurants & Dining", icon:"🍲", area:"Daily living", color:"#e7b66c"},
@@ -20,7 +34,7 @@
     {name:"Pets", icon:"🐾", area:"Health & care", color:"#c59b75"},
     {name:"Transportation", icon:"🚲", area:"Property & transport", color:"#8099c5"},
     {name:"Shopping & Personal Care", icon:"🌷", area:"Health & care", color:"#df9fc0"},
-    {name:"Clothes", icon:"👗", area:"Lifestyle & other", color:"#c47fa5"},
+    {name:"Clothes", icon:"👗", area:"Health & care", color:"#c47fa5"},
     {name:"Hobbies & Entertainment", icon:"🎨", area:"Lifestyle & other", color:"#b7a2d3"},
     {name:"Education & Professional Development", icon:"📚", area:"Lifestyle & other", color:"#a6b9a0"},
     {name:"Books", icon:"📖", area:"Lifestyle & other", color:"#b9a04a"},
@@ -53,7 +67,9 @@
   let budgets = cleanBudgets(readJSON(KEYS.budgets));
   let recurring = cleanRecurring(readJSON(KEYS.recurring));
   let income = cleanIncome(readJSON(KEYS.income));
-  let categoryTouched = false, methodTouched = false;   // set when she picks one herself, so suggestions stop overriding it
+  let trips = cleanTrips(readJSON(KEYS.trips));
+  let journalTrip = "";            // trip filter on the Transactions screen ("" = any)
+  let categoryTouched = false, methodTouched = false, tripTouched = false;   // set when she picks one herself, so suggestions stop overriding it
   let itemLookup = new Map();
 
   function validDate(s){
@@ -79,7 +95,12 @@
     if (!categoryNames.includes(category)) throw new Error(`Row ${index+1}: unknown category "${category}". Use one of the 14 fixed categories.`);
     const notes = String(raw.notes ?? raw.Notes ?? "").trim();
     const now=new Date().toISOString(),created=isoStamp(raw.createdAt ?? raw.createdat)||now;
-    return {id:String(raw.id || makeId()).slice(0,80),date,item,price:Math.round(price*100)/100,category,method:cleanMethod(raw.method ?? raw.Method ?? raw["paid with"]),notes:notes.slice(0,500),createdAt:created,updatedAt:isoStamp(raw.updatedAt ?? raw.updatedat)||created};
+    const out={id:String(raw.id || makeId()).slice(0,80),date,item,price:Math.round(price*100)/100,category,method:cleanMethod(raw.method ?? raw.Method ?? raw["paid with"]),notes:notes.slice(0,500),createdAt:created,updatedAt:isoStamp(raw.updatedAt ?? raw.updatedat)||created};
+    // Optional (version 2.4): the trip it belongs to, and the amount as typed in a foreign currency. `price` is always pesos.
+    const trip=String(raw.trip ?? "").trim().slice(0,80);if(trip)out.trip=trip;
+    const fxAmount=cleanAmount(raw.fxAmount ?? raw.foreignamount),fxCurrency=String(raw.fxCurrency ?? raw.foreigncurrency ?? "").trim().toUpperCase();
+    if(fxAmount&&/^[A-Z]{3}$/.test(fxCurrency)&&fxCurrency!=="PHP"){out.fxAmount=fxAmount;out.fxCurrency=fxCurrency;}
+    return out;
   }
   function makeId(){ return (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : `e-${Date.now()}-${Math.random().toString(36).slice(2,10)}`; }
   function loadExpenses(){
@@ -120,8 +141,14 @@
       $("categoryFilter").add(new Option(c.name,c.name));
       $("recurringCategory").add(new Option(`${c.icon} ${c.name}`,c.name));
     });
-    ["expenseMethod","recurringMethod"].forEach(id=>{$(id).add(new Option(NO_METHOD,""));METHODS.forEach(m=>$(id).add(new Option(m,m)));});
-    $("expenseMethod").value=cleanMethod(lsGet(KEYS.lastMethod));
+    fillMethodSelects();
+    $("expenseMethod").value=rememberedMethod();
+    WEEKDAYS.forEach((d,i)=>$("recurringWeekday").add(new Option(d,String(i))));$("recurringWeekday").value="1";
+    MONTH_NAMES.forEach((m,i)=>$("recurringMonth").add(new Option(new Date(2024,i,1).toLocaleDateString("en-PH",{month:"long"}),String(i+1))));$("recurringMonth").value=String(new Date().getMonth()+1);
+    CURRENCIES.forEach(c=>$("tripCurrency").add(new Option(`${c[0]} · ${c[1]}`,c[0])));
+    resetTripForm();fillTripSelect();autoTrip();syncRecurringFields();
+    setEntryOpen(expenses.length===0);   // phones: the form waits behind the + button once there is something to look at
+    $("shareBackupTool").classList.toggle("hidden",!canShareBackup);
     $("incomeDate").value=localDate();
     $("budgetCategoryFields").innerHTML=categories.map((c,i)=>`<div class="budget-field"><label for="budgetCat${i}">${c.icon} ${escapeHTML(c.name)}</label><div class="price-input"><span>₱</span><input id="budgetCat${i}" inputmode="decimal" max="999999999" min="0" placeholder="No limit" step="0.01" type="number"/></div></div>`).join("");
     { const lastCategory=lsGet(KEYS.lastCategory); if(categoryNames.includes(lastCategory)) $("expenseCategory").value=lastCategory; }
@@ -161,11 +188,31 @@
       go("transactions");
     }));
     $("clearCalendarDate").addEventListener("click",()=>{selectedCalendarDate="";renderCalendar();});
-    $("addOnSelectedDayBtn").addEventListener("click",()=>{if(!selectedCalendarDate)return;const day=selectedCalendarDate;resetForm();$("expenseDate").value=day;editReturn="";go("home",focusEntryForm);});
+    $("addOnSelectedDayBtn").addEventListener("click",()=>{if(!selectedCalendarDate)return;const day=selectedCalendarDate;resetForm();$("expenseDate").value=day;autoTrip();editReturn="";go("home",focusEntryForm);});
     $("openDayInJournalBtn").addEventListener("click",()=>{if(!selectedCalendarDate)return;setJournalFilters({date:selectedCalendarDate});go("transactions");});
-    $("clearJournalDate").addEventListener("click",()=>{journalDate="";journalMethod="";renderExpenses();});
+    $("clearJournalDate").addEventListener("click",()=>{journalDate="";journalMethod="";journalTrip="";renderExpenses();});
     $("expenseCategory").addEventListener("change",()=>{categoryTouched=true;});
     $("expenseMethod").addEventListener("change",()=>{methodTouched=true;});
+    $("expenseDate").addEventListener("change",autoTrip);
+    $("expenseTrip").addEventListener("change",()=>{tripTouched=true;setCurrencyChoice(true);syncTripFields();});
+    document.querySelectorAll('input[name="expenseCurrency"]').forEach(r=>r.addEventListener("change",syncTripFields));
+    $("expensePrice").addEventListener("input",syncTripFields);
+    $("fabAdd").addEventListener("click",()=>{if($("expenseId").value)resetForm();go("home",focusEntryForm);});
+    $("entryCloseBtn").addEventListener("click",()=>{if($("expenseId").value)cancelEdit();else resetForm();setEntryOpen(false);});
+    $("recentTransactions").addEventListener("click",event=>{
+      const again=event.target.closest("[data-repeat]"),open=event.target.closest("[data-open-item]");
+      if(again)repeatExpense(again.dataset.repeat);
+      else if(open){setJournalFilters({query:open.dataset.openItem});go("transactions");}
+    });
+    $("recurringFreq").addEventListener("change",syncRecurringFields);
+    $("methodForm").addEventListener("submit",addMethod);
+    $("tripForm").addEventListener("submit",saveTrip);
+    $("tripCancelBtn").addEventListener("click",()=>{resetTripForm();$("tripMessage").textContent="";});
+    $("tripCurrency").addEventListener("change",syncTripRateField);
+    $("tripList").addEventListener("click",onTripListClick);
+    $("flowYear").addEventListener("change",renderInsights);
+    $("shareBackupBtn").addEventListener("click",shareBackup);
+    $("shareBackupGo").addEventListener("click",()=>sendBackup(false));
     ["input","change"].forEach(type=>$("expenseItem").addEventListener(type,applySuggestion));
     $("budgetForm").addEventListener("submit",saveBudgetForm);
     $("clearBudgetBtn").addEventListener("click",()=>{budgets=cleanBudgets(null);lsSet(KEYS.budgets,JSON.stringify(budgets));fillBudgetForm(true);renderBudgetHome();$("budgetMessage").textContent="All limits cleared.";});
@@ -189,7 +236,7 @@
     window.addEventListener("storage",event=>{
       if(event.key===STORAGE_KEY){expenses=loadExpenses();renderAll();}
       else if(event.key===KEYS.views){customViews=loadCustomViews();renderSavedViews();}
-      else if([KEYS.budgets,KEYS.recurring,KEYS.income].includes(event.key)){budgets=cleanBudgets(readJSON(KEYS.budgets));recurring=cleanRecurring(readJSON(KEYS.recurring));income=cleanIncome(readJSON(KEYS.income));renderAll();}
+      else if([KEYS.budgets,KEYS.recurring,KEYS.income,KEYS.methods,KEYS.trips].includes(event.key)){budgets=cleanBudgets(readJSON(KEYS.budgets));recurring=cleanRecurring(readJSON(KEYS.recurring));income=cleanIncome(readJSON(KEYS.income));METHODS=cleanMethods(readJSON(KEYS.methods));trips=cleanTrips(readJSON(KEYS.trips));renderAll();}
     });
   }
   function setReportMonth(value){
@@ -197,8 +244,8 @@
     selectedCalendarDate="";renderAll();
   }
   // One place to set the Transactions filters, so every shortcut (charts, heatmap, calendar, recent items) behaves the same.
-  function setJournalFilters({query="",category="",month="",sort="",date="",method=""}={}){
-    journalMethod=method;
+  function setJournalFilters({query="",category="",month="",sort="",date="",method="",trip=""}={}){
+    journalMethod=method;journalTrip=trip;
     $("searchInput").value=query;$("q").value=query;$("categoryFilter").value=category;
     renderMonthFilter();$("monthFilter").value=month;if($("monthFilter").value!==month)$("monthFilter").value="";
     if(sort)$("sortFilter").value=sort;
@@ -206,13 +253,20 @@
   }
   function focusEntryForm(){
     const panel=document.querySelector(".entry-panel");
+    setEntryOpen(true);
     panel.scrollIntoView({behavior:"auto",block:"start"});
     $("expenseItem").focus({preventScroll:true});
   }
   function onSave(event){
     event.preventDefault();
     const id=$("expenseId").value;
-    const raw={id:id||makeId(),date:$("expenseDate").value,item:$("expenseItem").value,price:$("expensePrice").value,category:$("expenseCategory").value,method:$("expenseMethod").value,notes:$("expenseNotes").value};
+    const fx=fxMode(),typed=$("expensePrice").value,before=id?expenses.find(e=>e.id===id):null;
+    const raw={id:id||makeId(),date:$("expenseDate").value,item:$("expenseItem").value,price:typed,category:$("expenseCategory").value,method:$("expenseMethod").value,notes:$("expenseNotes").value,trip:$("expenseTrip").value};
+    if(fx){
+      // Saved in pesos at the trip's rate. An edit that leaves the foreign amount alone keeps the pesos it was first saved with.
+      const same=before&&before.fxCurrency===fx.currency&&before.fxAmount===cleanAmount(typed);
+      raw.price=same?before.price:Math.round(Number(typed)*fx.rate*100)/100;raw.fxAmount=typed;raw.fxCurrency=fx.currency;
+    }
     let entry;
     try{entry=normalizeExpense(raw);}catch(e){$("formMessage").textContent=e.message;return;}
     const previous=expenses;
@@ -229,11 +283,16 @@
     const back=id?editReturn:"";
     resetForm();renderAll();
     $("formMessage").textContent=id?"Expense updated.":"Expense added to your garden.";
+    if(isPhone()){
+      setEntryOpen(false);
+      if(id)showUndoToast("Expense updated.",false);
+      else{undoEntry={addedId:entry.id};showUndoToast(`Added “${entry.item}”, ${money(entry.price)}.`);}
+    }
     if(back&&back!=="home")go(back);
   }
   function cancelEdit(){const back=editReturn;resetForm();if(back&&back!=="home")go(back);}
   function resetForm(){
-    $("expenseForm").reset();$("expenseId").value="";$("expenseDate").value=localDate();editReturn="";$("optionalFields").open=false;categoryTouched=false;methodTouched=false;$("expenseMethod").value=cleanMethod(lsGet(KEYS.lastMethod));
+    $("expenseForm").reset();$("expenseId").value="";$("expenseDate").value=localDate();editReturn="";$("optionalFields").open=false;categoryTouched=false;methodTouched=false;tripTouched=false;fillMethodSelects();$("expenseMethod").value=rememberedMethod();autoTrip();
     $("saveExpenseBtn").textContent="Add expense";$("cancelEditBtn").classList.add("hidden");$("entryTitle").textContent="New expense";
     { const lastCategory=lsGet(KEYS.lastCategory); if(categoryNames.includes(lastCategory)) $("expenseCategory").value=lastCategory; }
     $("formMessage").textContent="";
@@ -241,7 +300,9 @@
   function editExpense(id){
     const from=currentRoute();
     const e=expenses.find(x=>x.id===id);if(!e)return;
-    $("expenseId").value=e.id;$("expenseDate").value=e.date;$("expenseItem").value=e.item;$("expensePrice").value=e.price;$("expenseCategory").value=e.category;$("expenseMethod").value=e.method||"";$("expenseNotes").value=e.notes;
+    $("expenseId").value=e.id;$("expenseDate").value=e.date;$("expenseItem").value=e.item;$("expensePrice").value=e.price;$("expenseCategory").value=e.category;setMethodValue($("expenseMethod"),e.method);$("expenseNotes").value=e.notes;
+    { const t=tripById(e.trip),useFx=!!(t&&t.currency!=="PHP"&&e.fxAmount&&e.fxCurrency===t.currency);
+      tripTouched=true;$("expenseTrip").value=t?t.id:"";setCurrencyChoice(useFx);if(useFx)$("expensePrice").value=e.fxAmount;syncTripFields(); }
     $("saveExpenseBtn").textContent="Save changes";$("cancelEditBtn").classList.remove("hidden");
     $("entryTitle").textContent="Edit expense";$("optionalFields").open=!!e.notes;$("formMessage").textContent="";
     editReturn=from==="home"?"":from;
@@ -255,23 +316,33 @@
     if(!saveExpenses()){expenses=previous;undoEntry=null;return;}
     renderAll();showUndoToast(`Deleted “${entry.item}”.`);
   }
-  function showUndoToast(message){
+  function showUndoToast(message,canUndo=true){
     const toast=$("undoToast");$("undoMessage").textContent=message;toast.hidden=false;
+    if(!canUndo)undoEntry=null;
+    $("undoDeleteBtn").classList.toggle("hidden",!canUndo);
     if(undoTimer)clearTimeout(undoTimer);
     undoTimer=setTimeout(()=>{toast.hidden=true;undoEntry=null;undoTimer=null;},8000);
   }
   function undoDelete(){
     if(!undoEntry)return;
+    if(undoEntry.addedId){   // undo of a quick add or a repeat
+      const previous=expenses;expenses=expenses.filter(e=>e.id!==undoEntry.addedId);
+      if(saveExpenses()){renderAll();$("undoToast").hidden=true;if(undoTimer)clearTimeout(undoTimer);undoTimer=null;}else expenses=previous;
+      undoEntry=null;return;
+    }
     if(expenses.some(e=>e.id===undoEntry.entry.id)){undoEntry=null;$("undoToast").hidden=true;return;}
     expenses.splice(Math.min(undoEntry.index,expenses.length),0,undoEntry.entry);
     if(saveExpenses()){renderAll();$("undoToast").hidden=true;if(undoTimer)clearTimeout(undoTimer);undoTimer=null;undoEntry=null;}
   }
-  function renderAll(){refreshYearOptions();renderSummary();renderReports();renderMonthFilter();renderExpenses();renderCalendar();renderComparison();renderSavedViews();renderInsights();renderRecentTransactions();renderBackupMeta();renderSuggestions();renderBudgetHome();renderDue();renderRecurringList();renderIncomeList();fillBudgetForm(false);renderHomeNotices();$("allCount").textContent=`${expenses.length} ${expenses.length===1?"entry":"entries"}`;}
+  function renderAll(){refreshYearOptions();renderSummary();renderReports();renderMonthFilter();renderExpenses();renderCalendar();renderComparison();renderSavedViews();renderInsights();renderRecentTransactions();renderBackupMeta();renderSuggestions();renderBudgetHome();renderDue();renderRecurringList();renderIncomeList();fillBudgetForm(false);renderHomeNotices();fillMethodSelects();renderMethodList();fillTripSelect();syncTripFields();renderTrips();renderTripHome();$("allCount").textContent=`${expenses.length} ${expenses.length===1?"entry":"entries"}`;}
   function renderRecentTransactions(){
     const host=$("recentTransactions"); if(!host)return; host.innerHTML="";
     const rows=[...expenses].sort((a,b)=>b.date.localeCompare(a.date)||String(b.createdAt||"").localeCompare(String(a.createdAt||""))).slice(0,5);
     if(!rows.length){host.innerHTML="<div class=\"recent-empty\"><span aria-hidden=\"true\">🌱</span><strong>No transactions yet</strong><span>Your first saved expense will show up here.</span></div>";return;}
-    rows.forEach(e=>{const c=getCategory(e.category),row=document.createElement("button");row.type="button";row.className="recent-transaction";row.innerHTML=`<span class=\"recent-category-icon\" aria-hidden=\"true\">${c.icon}</span><span class=\"recent-main\"><strong>${escapeHTML(e.item)}</strong><small>${escapeHTML(new Date(e.date+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"numeric"}))} · ${escapeHTML(e.category)}</small></span><strong class=\"recent-amount\">${money(e.price)}</strong><span class=\"recent-chevron\" aria-hidden=\"true\">›</span>`;row.addEventListener("click",()=>{setJournalFilters({query:e.item});go("transactions");});host.appendChild(row);});
+    rows.forEach(e=>{
+      const c=getCategory(e.category),row=document.createElement("div");row.className="recent-transaction recent-row";
+      row.innerHTML=`<button class="recent-open" type="button" data-open-item="${escapeHTML(e.item)}" aria-label="Open ${escapeHTML(e.item)} in Transactions"><span class="recent-category-icon" aria-hidden="true">${c.icon}</span><span class="recent-main"><strong>${escapeHTML(e.item)}</strong><small>${escapeHTML(shortDate(e.date))} · ${escapeHTML(e.category)}</small></span><strong class="recent-amount">${money(e.price)}</strong></button><button class="icon-button repeat-button" type="button" data-repeat="${escapeHTML(e.id)}" aria-label="Add ${escapeHTML(e.item)} again for today" title="Add again for today">↻</button>`;
+      host.appendChild(row);});
   }
   function selectedMonth(){return $("reportMonth").value||currentMonth();}
   function renderSummary(){
@@ -281,7 +352,7 @@
     $("dailyAverage").textContent=money(elapsed?sum(rows)/elapsed:0);
     $("monthLabel").textContent=new Date(y,m-1,1).toLocaleDateString("en-PH",{month:"long",year:"numeric"});
   }
-  function renderReports(){renderSummary();const rows=expenses.filter(e=>e.date.startsWith(selectedMonth()));renderPie("categoryChart","categoryLegend",categories.map(c=>({name:c.name,color:c.color,value:sum(rows.filter(e=>e.category===c.name)),icon:c.icon})),sum(rows));renderPie("areaChart","areaLegend",areas.map(a=>({name:a.name,color:a.color,value:sum(rows.filter(e=>getCategory(e.category).area===a.name))})),sum(rows));renderPie("methodChart","methodLegend",[...METHODS,NO_METHOD].map(m=>({name:m,color:methodColors[m],value:sum(rows.filter(e=>(e.method||NO_METHOD)===m))})),sum(rows));renderDailyChart(rows);}
+  function renderReports(){renderSummary();const rows=expenses.filter(e=>e.date.startsWith(selectedMonth()));renderPie("categoryChart","categoryLegend",categories.map(c=>({name:c.name,color:c.color,value:sum(rows.filter(e=>e.category===c.name)),icon:c.icon})),sum(rows));renderPie("areaChart","areaLegend",areas.map(a=>({name:a.name,color:a.color,value:sum(rows.filter(e=>getCategory(e.category).area===a.name))})),sum(rows));renderPie("methodChart","methodLegend",[...new Set([...METHODS,...rows.map(e=>e.method).filter(Boolean),NO_METHOD])].map(m=>({name:m,color:methodColor(m),value:sum(rows.filter(e=>(e.method||NO_METHOD)===m))})),sum(rows));renderDailyChart(rows);}
   function renderPie(chartId,legendId,items,total){
     const chart=$(chartId),legend=$(legendId);chart.innerHTML="";legend.innerHTML="";
     if(total<=0){chart.innerHTML='<div class="no-chart">Your chart will bloom after your first entry.</div>';return;}
@@ -325,9 +396,9 @@
   function refreshYearOptions(){
     const thisYear=String(new Date().getFullYear());
     const years=new Set([thisYear,selectedMonth().slice(0,4)]);
-    expenses.forEach(e=>years.add(e.date.slice(0,4)));
+    expenses.forEach(e=>years.add(e.date.slice(0,4)));income.forEach(r=>years.add(r.date.slice(0,4)));
     const list=[...years].sort().reverse();
-    ["yearSummaryYear","trendYear","heatmapYear","pdfYear"].forEach(id=>{
+    ["yearSummaryYear","trendYear","flowYear","heatmapYear","pdfYear"].forEach(id=>{
       const select=$(id),keep=select.value;
       if([...select.options].map(o=>o.value).join()===list.join()) return;
       select.innerHTML="";
@@ -360,7 +431,9 @@
     $("yearTotal").textContent=money(yearTotal);$("yearMonthlyAverage").textContent=money(yearTotal/12);$("yearEntryCount").textContent=String(yearRows.length);
     const catTotals=categories.map(c=>({name:c.name,icon:c.icon,total:sum(yearRows.filter(e=>e.category===c.name))})).sort((a,b)=>b.total-a.total);
     $("yearTopCategory").textContent=catTotals[0]?.total?`Highest category: ${catTotals[0].icon} ${catTotals[0].name} (${money(catTotals[0].total)})`:"Add entries to see your highest-spending category.";
-    renderTrendChart($("trendYear").value||year);renderHeatmap($("heatmapYear").value||year);
+    { const got=incomeSum(r=>r.date.startsWith(year)),kept=Math.round((got-yearTotal)*100)/100;
+      $("yearIncomeLine").textContent=got?`Income ${money(got)} · ${kept>=0?`${money(kept)} kept (${(kept/got*100).toFixed(1)}% savings rate)`:`${money(-kept)} more spent than received`}`:""; }
+    renderTrendChart($("trendYear").value||year);renderFlowChart($("flowYear").value||year);renderHeatmap($("heatmapYear").value||year);
   }
   function renderTrendChart(year){
     const holder=$("spendingTrends"),legend=$("trendLegend");holder.innerHTML="";legend.innerHTML="";
@@ -378,6 +451,35 @@
     });
     holder.appendChild(svg);
   }
+  // Income beside spending for each month of a year, with the share kept (savings rate) drawn over it.
+  function renderFlowChart(year){
+    const holder=$("flowChart"),note=$("flowSummary");holder.innerHTML="";note.textContent="";
+    const key=m=>`${year}-${String(m+1).padStart(2,"0")}`;
+    const got=Array.from({length:12},(_,m)=>incomeSum(r=>r.date.startsWith(key(m)))),spent=Array.from({length:12},(_,m)=>sum(expenses.filter(e=>e.date.startsWith(key(m)))));
+    const totalGot=Math.round(got.reduce((a,b)=>a+b*100,0))/100,totalSpent=Math.round(spent.reduce((a,b)=>a+b*100,0))/100;
+    if(!totalGot){holder.innerHTML=`<div class="no-chart">No income recorded for ${escapeHTML(year)}. Add it in Budget and income to see what you keep each month.</div>`;return;}
+    const ns="http://www.w3.org/2000/svg",svg=document.createElementNS(ns,"svg");svg.setAttribute("viewBox","0 0 720 250");svg.setAttribute("role","img");svg.setAttribute("aria-label",`Income, spending and savings rate by month in ${year}`);
+    const el=(tag,attrs,text)=>{const n=document.createElementNS(ns,tag);Object.keys(attrs).forEach(k=>n.setAttribute(k,attrs[k]));if(text!==undefined)n.textContent=text;svg.appendChild(n);return n;};
+    const max=Math.max(1,...got,...spent),left=48,right=672,top=15,bottom=205,band=(right-left)/12,h=v=>(bottom-top)*v/max;
+    for(let g=0;g<=4;g++){const y=bottom-(bottom-top)*g/4;el("line",{x1:left,x2:right,y1:y,y2:y,class:"trend-gridline"});el("text",{x:left-7,y:y+4,"text-anchor":"end",class:"trend-axis-label"},compactMoney(max*g/4));el("text",{x:right+7,y:y+4,"text-anchor":"start",class:"trend-axis-label"},`${g*25}%`);}
+    const points=[];
+    MONTH_NAMES.forEach((name,i)=>{
+      const x=left+band*i;
+      el("text",{x:x+band/2,y:228,"text-anchor":"middle",class:"trend-axis-label"},name);
+      if(got[i])el("rect",{x:x+band*.16,y:bottom-h(got[i]),width:band*.32,height:Math.max(1,h(got[i])),rx:3,class:"flow-income","aria-label":`${name}: ${money(got[i])} received`});
+      if(spent[i])el("rect",{x:x+band*.52,y:bottom-h(spent[i]),width:band*.32,height:Math.max(1,h(spent[i])),rx:3,class:"flow-spent","aria-label":`${name}: ${money(spent[i])} spent`});
+      if(got[i]){const rate=Math.max(0,Math.min(1,(got[i]-spent[i])/got[i]));points.push({x:x+band/2,y:bottom-(bottom-top)*rate,label:`${name}: ${(100*(got[i]-spent[i])/got[i]).toFixed(0)}% kept`});}
+    });
+    if(points.length>1)el("polyline",{points:points.map(p=>`${p.x},${p.y}`).join(" "),class:"flow-rate"});
+    points.forEach(p=>el("circle",{cx:p.x,cy:p.y,r:4,class:"flow-rate-dot","aria-label":p.label}));
+    holder.appendChild(svg);
+    flowLastMonth=Math.max(0,...got.map((v,i)=>v||spent[i]?i:0));scrollFlowChart();
+    const kept=Math.round((totalGot-totalSpent)*100)/100;
+    note.textContent=`${year}: ${money(totalGot)} received, ${money(totalSpent)} spent. ${kept>=0?`${money(kept)} kept, a savings rate of ${(kept/totalGot*100).toFixed(1)}%.`:`${money(-kept)} more spent than received.`}`;
+  }
+  // On a phone the chart is wider than the screen: bring the latest month with figures into view.
+  let flowLastMonth = 0;
+  function scrollFlowChart(){const box=$("flowChart");if(box.scrollWidth>box.clientWidth)box.scrollLeft=flowLastMonth>=8?box.scrollWidth:Math.max(0,box.scrollWidth*(flowLastMonth+1.6)/12-box.clientWidth);}
   function renderHeatmap(year){
     const holder=$("spendingHeatmap");holder.innerHTML="";
     const values=expenses.filter(e=>e.date.startsWith(year)).reduce((o,e)=>(o[e.date]=(o[e.date]||0)+e.price,o),{});
@@ -416,9 +518,10 @@
       if(month&&!e.date.startsWith(month))return false;
       if(journalDate&&e.date!==journalDate)return false;
       if(journalMethod&&(e.method||NO_METHOD)!==journalMethod)return false;
+      if(journalTrip&&e.trip!==journalTrip)return false;
       if(!terms.length)return true;
       const cat=getCategory(e.category);
-      const searchable=[e.item,e.notes,e.category,e.method,cat.area,cat.icon,e.date,e.date.slice(0,7),e.date.slice(8,10),
+      const searchable=[e.item,e.notes,e.category,e.method,(tripById(e.trip)||{}).name||"",e.fxCurrency||"",cat.area,cat.icon,e.date,e.date.slice(0,7),e.date.slice(8,10),
         new Date(e.date+"T00:00:00").toLocaleDateString("en-PH",{month:"long",day:"numeric",year:"numeric"}),
         String(e.price),e.price.toFixed(2),money(e.price),String(Math.round(e.price)),e.id].join(" ").toLocaleLowerCase();
       return terms.every(term=>searchable.includes(term));
@@ -427,15 +530,16 @@
     const tbody=$("expenseRows");tbody.innerHTML="";
     rows.forEach(e=>{
       const c=getCategory(e.category),tr=document.createElement("tr");
-      tr.innerHTML=`<td class="cell-date">${escapeHTML(new Date(e.date+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"}))}</td><td class="cell-item" title="${escapeHTML(e.notes)}">${escapeHTML(e.item)}${e.notes?`<div class="chart-subtitle">${escapeHTML(e.notes)}</div>`:""}</td><td class="cell-cat"><span class="category-chip">${c.icon} ${escapeHTML(e.category)}</span>${e.method?`<span class="method-tag">${escapeHTML(e.method)}</span>`:""}</td><td class="amount-col"><strong>${money(e.price)}</strong></td><td class="actions-col"><div class="row-actions"><button class="icon-button" type="button" data-edit="${escapeHTML(e.id)}" aria-label="Edit ${escapeHTML(e.item)}">Edit</button><button class="icon-button" type="button" data-delete="${escapeHTML(e.id)}" aria-label="Delete ${escapeHTML(e.item)}">×</button></div></td>`;
+      tr.innerHTML=`<td class="cell-date">${escapeHTML(new Date(e.date+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"}))}</td><td class="cell-item" title="${escapeHTML(e.notes)}">${escapeHTML(e.item)}${e.notes?`<div class="chart-subtitle">${escapeHTML(e.notes)}</div>`:""}</td><td class="cell-cat"><span class="category-chip">${c.icon} ${escapeHTML(e.category)}</span>${e.method?`<span class="method-tag">${escapeHTML(e.method)}</span>`:""}${tripById(e.trip)?`<span class="method-tag trip-tag">✈ ${escapeHTML(tripById(e.trip).name)}</span>`:""}</td><td class="amount-col"><strong>${money(e.price)}</strong>${e.fxAmount?`<div class="fx-note">${escapeHTML(fxMoney(e.fxAmount,e.fxCurrency))}</div>`:""}</td><td class="actions-col"><div class="row-actions"><button class="icon-button" type="button" data-repeat="${escapeHTML(e.id)}" aria-label="Add ${escapeHTML(e.item)} again for today" title="Add again for today">↻</button><button class="icon-button" type="button" data-edit="${escapeHTML(e.id)}" aria-label="Edit ${escapeHTML(e.item)}">Edit</button><button class="icon-button" type="button" data-delete="${escapeHTML(e.id)}" aria-label="Delete ${escapeHTML(e.item)}">×</button></div></td>`;
       tbody.appendChild(tr);
     });
     tbody.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editExpense(b.dataset.edit)));
     tbody.querySelectorAll("[data-delete]").forEach(b=>b.addEventListener("click",()=>askDelete(b.dataset.delete)));
+    tbody.querySelectorAll("[data-repeat]").forEach(b=>b.addEventListener("click",()=>repeatExpense(b.dataset.repeat)));
     $("emptyState").classList.toggle("hidden",rows.length>0);
     $("filteredSummary").textContent=`Showing ${rows.length} of ${expenses.length} ${expenses.length===1?"entry":"entries"}`;$("filteredTotal").textContent=money(sum(rows));
-    $("journalDateChip").classList.toggle("hidden",!journalDate&&!journalMethod);
-    $("journalDateLabel").textContent=[journalDate?`Only ${longDate(journalDate)}`:"",journalMethod?(journalMethod===NO_METHOD?"No payment method set":`Paid with ${journalMethod}`):""].filter(Boolean).join(" · ");
+    $("journalDateChip").classList.toggle("hidden",!journalDate&&!journalMethod&&!journalTrip);
+    $("journalDateLabel").textContent=[journalDate?`Only ${longDate(journalDate)}`:"",journalMethod?(journalMethod===NO_METHOD?"No payment method set":`Paid with ${journalMethod}`):"",journalTrip?`Trip: ${(tripById(journalTrip)||{name:"removed"}).name}`:""].filter(Boolean).join(" · ");
   }
   function longDate(date){return new Date(date+"T00:00:00").toLocaleDateString("en-PH",{month:"long",day:"numeric",year:"numeric"});}
   function renderCalendarDay(){
@@ -523,14 +627,40 @@
     const last=isoStamp(lsGet(KEYS.lastBackup)||""),count=`${expenses.length} ${expenses.length===1?"expense":"expenses"} on this device.`;
     $("backupMeta").textContent=last?`${count} Last backup exported ${new Date(last).toLocaleDateString("en-PH",{month:"long",day:"numeric",year:"numeric"})}.`:`${count} No backup exported from this device yet.`;
   }
-  async function exportJSON(){
+  async function buildBackup(){
     const payload={app:"Little Garden Expense Tracker",schemaVersion:1,appVersion:META.version,currency:"PHP",exportedAt:new Date().toISOString(),categories:categoryNames,expenses,...snapshotExtras(),payMe:await payMeForBackup()};
-    downloadFile(`little-garden-expenses-${localDate()}.json`,JSON.stringify(payload,null,2),"application/json;charset=utf-8");
-    lsSet(KEYS.lastBackup,payload.exportedAt);renderBackupMeta();
+    return {name:`little-garden-expenses-${localDate()}.json`,text:JSON.stringify(payload,null,2),stamp:payload.exportedAt};
+  }
+  async function exportJSON(){
+    const backup=await buildBackup();
+    downloadFile(backup.name,backup.text,"application/json;charset=utf-8");
+    lsSet(KEYS.lastBackup,backup.stamp);renderBackupMeta();
+  }
+  /* Save to Files or iCloud (version 2.4): hands the backup to the phone's share sheet, in Safari as well as the installed app.
+     iPhone only allows share() straight after a tap. Building the file can outlast that, so when the first try is refused
+     the file is kept and a second button sends it at once. */
+  const canShareBackup = (() => { try { return !!(navigator.canShare && navigator.share && navigator.canShare({files:[new File(["{}"],"backup.json",{type:"application/json"})]})); } catch(e) { return false; } })();
+  let backupReady = null;
+  async function shareBackup(){
+    $("shareBackupMessage").textContent="Preparing your backup…";$("shareBackupGo").classList.add("hidden");
+    const backup=await buildBackup();
+    backupReady={file:new File([backup.text],backup.name,{type:"application/json"}),text:backup.text,stamp:backup.stamp};
+    sendBackup(true);
+  }
+  function sendBackup(first){
+    const ready=backupReady,msg=$("shareBackupMessage"),again=$("shareBackupGo");if(!ready)return;
+    const done=text=>{backupReady=null;again.classList.add("hidden");msg.textContent=text;};
+    let sharing;try{sharing=navigator.share({files:[ready.file],title:ready.file.name});}catch(e){sharing=Promise.reject(e);}
+    sharing.then(()=>{lsSet(KEYS.lastBackup,ready.stamp);renderBackupMeta();renderHomeNotices();done("Done. If you chose Save to Files, your backup is in the folder you picked.");})
+      .catch(err=>{
+        if(err&&err.name==="AbortError")done("Nothing was saved. Tap the button to try again.");
+        else if(first){again.classList.remove("hidden");msg.textContent="Your backup is ready. Tap “Open the share sheet”, then choose Save to Files.";}
+        else{downloadFile(ready.file.name,ready.text,"application/json;charset=utf-8");lsSet(KEYS.lastBackup,ready.stamp);renderBackupMeta();done("Sharing is not available here, so the backup was downloaded instead.");}
+      });
   }
   function csvCell(value){const s=String(value??"");return /[",\r\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;}
   function exportCSV(){
-    const rows=[["id","date","item","price","category","method","notes","createdAt","updatedAt"],...expenses.map(e=>[e.id,e.date,e.item,e.price.toFixed(2),e.category,e.method,e.notes,e.createdAt,e.updatedAt])];
+    const rows=[["id","date","item","price","category","method","notes","createdAt","updatedAt","trip","foreignAmount","foreignCurrency"],...expenses.map(e=>[e.id,e.date,e.item,e.price.toFixed(2),e.category,e.method,e.notes,e.createdAt,e.updatedAt,(tripById(e.trip)||{}).name||"",e.fxAmount||"",e.fxCurrency||""])];
     downloadFile(`little-garden-expenses-${localDate()}.csv`,"\uFEFF"+rows.map(r=>r.map(csvCell).join(",")).join("\r\n"),"text/csv;charset=utf-8");
   }
   function parseCSV(text){
@@ -540,7 +670,9 @@
     if(!rows.length)throw new Error("The CSV file is empty.");
     const headers=rows.shift().map(h=>h.trim().replace(/^\uFEFF/,"").toLowerCase());
     const required=["date","item","price","category"];for(const key of required)if(!headers.includes(key))throw new Error(`CSV is missing the required "${key}" column.`);
-    return rows.map((values,i)=>{const obj={};headers.forEach((h,j)=>obj[h]=values[j]??"");const entry=normalizeExpense(obj,i);if(!String(obj.id||"").trim())entry.noId=true;return entry;});
+    return rows.map((values,i)=>{const obj={};headers.forEach((h,j)=>obj[h]=values[j]??"");
+      if(obj.trip){const name=String(obj.trip).trim().toLowerCase(),t=trips.find(x=>x.id===obj.trip||x.name.toLowerCase()===name);obj.trip=t?t.id:"";}   // the CSV holds the trip's name
+      const entry=normalizeExpense(obj,i);if(!String(obj.id||"").trim())entry.noId=true;return entry;});
   }
 
   function initPdfExportControls(){
@@ -590,7 +722,7 @@
   }
   function pdfTableRows(rows){
     if(!rows.length)return '<tr><td colspan="4" class="empty-row">No expenses recorded in this period.</td></tr>';
-    return rows.map(e=>`<tr><td>${pdfEscape(pdfDateLabel(e.date))}</td><td class="description-cell">${pdfEscape(e.item)}${e.notes?`<small>${pdfEscape(e.notes)}</small>`:""}</td><td>${pdfEscape(e.category)}</td><td class="amount">${money(e.price)}</td></tr>`).join("");
+    return rows.map(e=>`<tr><td>${pdfEscape(pdfDateLabel(e.date))}</td><td class="description-cell">${pdfEscape(e.item)}${e.notes?`<small>${pdfEscape(e.notes)}</small>`:""}</td><td>${pdfEscape(e.category)}</td><td class="amount">${money(e.price)}${e.fxAmount?`<small style="display:block;color:#718274">${pdfEscape(fxMoney(e.fxAmount,e.fxCurrency))}</small>`:""}</td></tr>`).join("");
   }
   function pdfBarRows(items,total){
     if(!items.length)return '<p class="muted">No spending to chart for this period.</p>';
@@ -656,6 +788,12 @@
           <div class="chart-panel">${pdfBarRows(usedCategories,total)}</div>
           <div class="chart-panel"><h3>Category totals</h3><table><thead><tr><th>Category</th><th class="amount">Amount</th><th class="amount">Share</th></tr></thead><tbody>${categoryTable}</tbody><tfoot><tr class="total-row"><td>Total</td><td class="amount">${money(total)}</td><td class="amount">${total?"100.0":"0.0"}%</td></tr></tfoot></table></div>
         </div></section>`:"";
+      const incomeRows=income.filter(r=>r.date>=range.start&&r.date<=range.end).sort((a,b)=>a.date.localeCompare(b.date)),received=incomeSum(r=>r.date>=range.start&&r.date<=range.end),kept=Math.round((received-total)*100)/100;
+      const incomeSection=incomeRows.length?`
+        <section class="report-section"><h2>Income and savings</h2>
+          <div class="metrics"><div class="metric"><span>Income received</span><strong>${money(received)}</strong></div><div class="metric"><span>Spent</span><strong>${money(total)}</strong></div><div class="metric"><span>${kept>=0?"Left after spending":"Spent beyond income"}</span><strong>${money(Math.abs(kept))}</strong></div><div class="metric"><span>Savings rate</span><strong>${kept>=0?(kept/received*100).toFixed(1)+"%":"—"}</strong></div></div>
+          <table><thead><tr><th>Date</th><th>Source</th><th class="amount">Amount (PHP)</th></tr></thead><tbody>${incomeRows.map(r=>`<tr><td>${pdfEscape(pdfDateLabel(r.date))}</td><td>${pdfEscape(r.source)}</td><td class="amount">${money(r.amount)}</td></tr>`).join("")}</tbody><tfoot><tr class="total-row"><td colspan="2">Total income</td><td class="amount">${money(received)}</td></tr></tfoot></table>
+        </section>`:"";
       const htmlDoc=`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Little Garden — ${pdfEscape(range.label)} report</title><style>
         :root{--ink:#263e31;--muted:#718274;--deep:#315b43;--leaf:#80a878;--line:#dfe5d8;--sage:#e9f0df}
         *{box-sizing:border-box}body{margin:0;background:#f3f5ef;color:var(--ink);font:10pt/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
@@ -681,7 +819,7 @@
         </style></head><body><main class="report ${visual?"visual":"spreadsheet"}">
         <header class="masthead"><div class="brandline"><div class="leaf">❀</div><div><p class="eyebrow">Little Garden · Expense Tracker</p><h1>${visual?"Spending in Bloom":"Expense Report"}</h1><div class="subtitle">${visual?"A thoughtful look at your money":"Personal spending statement"}</div></div></div><div class="period"><strong>${pdfEscape(range.label)}</strong><span>${pdfEscape(pdfDateLabel(range.start))} – ${pdfEscape(pdfDateLabel(range.end))}</span><span>Generated ${pdfEscape(new Date().toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"}))}</span></div></header>
         <div class="metrics"><div class="metric"><span>Total spent</span><strong>${money(total)}</strong></div><div class="metric"><span>Transactions</span><strong>${count}</strong></div><div class="metric"><span>Days with expenses</span><strong>${new Set(rows.map(e=>e.date)).size}</strong></div><div class="metric"><span>Average per transaction</span><strong>${money(average)}</strong></div></div>
-        ${categorySection}${chartSection}${insightSection}
+        ${incomeSection}${categorySection}${chartSection}${insightSection}
         <section class="report-section"><h2>All transactions <span class="subtitle">(${count})</span></h2><table><thead><tr><th>Date</th><th>Description / notes</th><th>Category</th><th class="amount">Amount (PHP)</th></tr></thead><tbody>${pdfTableRows(rows)}</tbody><tfoot><tr class="total-row"><td colspan="3">Total for selected period</td><td class="amount">${money(total)}</td></tr></tfoot></table></section>
         <p class="notes">Amounts are shown in Philippine pesos (PHP). This report includes all saved transactions dated within the selected period. Your records remain stored locally in your browser.</p><footer class="footer"><span>Little Garden · Better spending, brighter days.</span><span>${pdfEscape(range.start)} to ${pdfEscape(range.end)}</span></footer>
         <p class="print-hint no-print">Use your browser’s Print command, then choose “Save as PDF” (wording varies by device).</p>
@@ -753,6 +891,8 @@
     if("budgets" in snap)budgets=cleanBudgets(snap.budgets);
     if("recurring" in snap)recurring=cleanRecurring(snap.recurring);
     if("income" in snap)income=cleanIncome(snap.income);
+    if("methods" in snap)METHODS=cleanMethods(snap.methods);
+    if("trips" in snap)trips=cleanTrips(snap.trips);
     saveExtras();
     lsDel(KEYS.importUndo);renderAll();renderUndoImport();
     message.textContent="Import undone. Your earlier records are back.";message.style.color="var(--deep)";
@@ -772,15 +912,26 @@
     if(v.categories&&typeof v.categories==="object")categoryNames.forEach(name=>{const n=cleanAmount(v.categories[name]);if(n)out.categories[name]=n;});
     return out;
   }
+  // freq: monthly (day) | weekly (weekday 0-6) | quarterly (day, month = a month it falls in) | yearly (day, month).
+  // `done` is the period already handled: "YYYY-MM", or the Monday "YYYY-MM-DD" of the week for weekly ones.
   function cleanRecurring(v){
     if(!Array.isArray(v))return [];
     const seen=new Set();
     return v.map(r=>{
       if(!r||typeof r!=="object")return null;
-      const item=String(r.item||"").trim().slice(0,120),price=cleanAmount(r.price),day=Math.round(Number(r.day));
-      if(!item||!price||!categoryNames.includes(r.category)||!(day>=1&&day<=31))return null;
+      const item=String(r.item||"").trim().slice(0,120),price=cleanAmount(r.price);
+      const freq=Object.prototype.hasOwnProperty.call(FREQS,r.freq)?r.freq:"monthly";
+      let day=Math.round(Number(r.day));const weekday=Math.round(Number(r.weekday)),month=Math.round(Number(r.month));
+      if(!item||!price||!categoryNames.includes(r.category))return null;
+      if(freq==="weekly"){if(!(weekday>=0&&weekday<=6))return null;day=1;}
+      else if(!(day>=1&&day<=31))return null;
+      if((freq==="quarterly"||freq==="yearly")&&!(month>=1&&month<=12))return null;
       let id=String(r.id||makeId()).slice(0,80);if(seen.has(id))id=makeId();seen.add(id);
-      return {id,item,price,category:r.category,method:cleanMethod(r.method),day,doneMonth:/^\d{4}-\d{2}$/.test(r.doneMonth)?r.doneMonth:""};
+      const done=String(r.done||r.doneMonth||"");   // doneMonth: the name used before version 2.4
+      const out={id,item,price,category:r.category,method:cleanMethod(r.method),freq,day,done:/^\d{4}-\d{2}(-\d{2})?$/.test(done)?done:""};
+      if(freq==="weekly")out.weekday=weekday;
+      if(freq==="quarterly"||freq==="yearly")out.month=month;
+      return out;
     }).filter(Boolean).slice(0,100);
   }
   function cleanIncome(v){
@@ -794,9 +945,10 @@
       return {id,date:r.date,source,amount};
     }).filter(Boolean).slice(0,20000);
   }
-  const snapshotExtras = () => ({savedViews:customViews,budgets,recurring,income});
+  const snapshotExtras = () => ({savedViews:customViews,budgets,recurring,income,methods:METHODS,trips});
+  const incomeSum = test => Math.round(income.filter(test).reduce((n,r)=>n+Math.round(r.amount*100),0))/100;
   function saveExtras(){
-    return [lsSet(KEYS.views,JSON.stringify(customViews)),lsSet(KEYS.budgets,JSON.stringify(budgets)),lsSet(KEYS.recurring,JSON.stringify(recurring)),lsSet(KEYS.income,JSON.stringify(income))].every(Boolean);
+    return [lsSet(KEYS.views,JSON.stringify(customViews)),lsSet(KEYS.budgets,JSON.stringify(budgets)),lsSet(KEYS.recurring,JSON.stringify(recurring)),lsSet(KEYS.income,JSON.stringify(income)),lsSet(KEYS.methods,JSON.stringify(METHODS)),lsSet(KEYS.trips,JSON.stringify(trips))].every(Boolean);
   }
   // A backup made before version 2.1 has no budget, recurring or income section: whatever is missing from the file is left as it is.
   function applyImportedExtras(file,merge){
@@ -811,6 +963,8 @@
     }
     if(Array.isArray(file.recurring))recurring=cleanRecurring(byId(recurring,cleanRecurring(file.recurring)));
     if(Array.isArray(file.income))income=cleanIncome(byId(income,cleanIncome(file.income)));
+    if(Array.isArray(file.methods)){const theirs=cleanMethods(file.methods);METHODS=merge?cleanMethods([...METHODS,...theirs]):theirs;}
+    if(Array.isArray(file.trips))trips=cleanTrips(byId(trips,cleanTrips(file.trips)));
     saveExtras();
   }
 
@@ -835,7 +989,10 @@
   /* ----- Budget ----- */
   function budgetBar(label,spent,limit){
     const ratio=limit?spent/limit:0,state=ratio>1?"over":ratio>=.8?"near":"ok",left=Math.round((limit-spent)*100)/100;
-    return `<div class="budget-row budget-${state}"><div class="budget-row-head"><span class="budget-row-label">${label}</span><span class="budget-row-figures">${money(spent)} of ${money(limit)}</span></div><div class="budget-track" role="img" aria-label="${Math.round(ratio*100)} percent of the limit used"><i style="width:${Math.min(100,ratio*100).toFixed(1)}%"></i></div><span class="budget-row-note">${left>=0?`${money(left)} left`:`${money(-left)} over`}</span></div>`;
+    const now=new Date(),daysLeft=new Date(now.getFullYear(),now.getMonth()+1,0).getDate()-now.getDate()+1;
+    const perDay=left>0?` · about ${money(left/daysLeft)} a day for the ${daysLeft===1?"last day":`${daysLeft} days left`}`:"";
+    const note=left<0?`${money(-left)} over`:state==="near"?`Getting close: ${money(left)} left${perDay}`:`${money(left)} left${perDay}`;
+    return `<div class="budget-row budget-${state}"><div class="budget-row-head"><span class="budget-row-label">${label}</span><span class="budget-row-figures">${money(spent)} of ${money(limit)}</span></div><div class="budget-track" role="img" aria-label="${Math.round(ratio*100)} percent of the limit used"><i style="width:${Math.min(100,ratio*100).toFixed(1)}%"></i></div><span class="budget-row-note">${note}</span></div>`;
   }
   function renderBudgetHome(){
     const month=currentMonth(),rows=expenses.filter(e=>e.date.startsWith(month)),spent=sum(rows);
@@ -864,42 +1021,64 @@
   }
 
   /* ----- Recurring expenses ----- */
-  function dueDate(r,month){const [y,m]=month.split("-").map(Number);return `${month}-${String(Math.min(r.day,new Date(y,m,0).getDate())).padStart(2,"0")}`;}
+  // The period a recurring item is due in right now, or null when it is not due (a yearly bill in another month).
+  function duePeriod(r){
+    const now=new Date(),y=now.getFullYear(),m=now.getMonth()+1;
+    if(r.freq==="weekly"){const monday=shiftDate(now,-((now.getDay()+6)%7));return {key:isoDate(monday),date:isoDate(shiftDate(monday,(r.weekday+6)%7))};}
+    if(r.freq==="quarterly"&&((m-r.month)%3+3)%3!==0)return null;
+    if(r.freq==="yearly"&&m!==r.month)return null;
+    return {key:currentMonth(),date:`${currentMonth()}-${String(Math.min(r.day,new Date(y,m,0).getDate())).padStart(2,"0")}`};
+  }
+  function recurLabel(r){
+    if(r.freq==="weekly")return `Every ${WEEKDAYS[r.weekday]}`;
+    if(r.freq==="quarterly")return `Every 3 months (${[0,3,6,9].map(k=>MONTH_NAMES[(r.month-1+k)%12]).join(", ")}), day ${r.day}`;
+    if(r.freq==="yearly")return `Every ${MONTH_NAMES[r.month-1]} ${r.day}`;
+    return `Day ${r.day}`;
+  }
   const shortDate = date => new Date(date+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"numeric"});
   function saveRecurring(){return lsSet(KEYS.recurring,JSON.stringify(recurring));}
+  function syncRecurringFields(){
+    const f=$("recurringFreq").value;
+    $("recurringDayField").classList.toggle("hidden",f==="weekly");
+    $("recurringWeekdayField").classList.toggle("hidden",f!=="weekly");
+    $("recurringMonthField").classList.toggle("hidden",f!=="quarterly"&&f!=="yearly");
+    $("recurringMonthLabel").textContent=f==="quarterly"?"A month it falls in":"Month";
+  }
   function renderDue(){
-    const month=currentMonth(),due=recurring.filter(r=>r.doneMonth!==month).sort((a,b)=>a.day-b.day),list=$("dueList");
+    const due=recurring.map(r=>({r,p:duePeriod(r)})).filter(x=>x.p&&x.r.done!==x.p.key).sort((a,b)=>a.p.date.localeCompare(b.p.date)),list=$("dueList");
     $("duePanel").classList.toggle("hidden",!due.length);list.innerHTML="";
-    due.forEach(r=>{
+    due.forEach(({r,p})=>{
       const c=getCategory(r.category),row=document.createElement("div");row.className="recent-transaction due-row";
-      row.innerHTML=`<span class="recent-category-icon" aria-hidden="true">${c.icon}</span><span class="recent-main"><strong>${escapeHTML(r.item)}</strong><small>${escapeHTML(shortDate(dueDate(r,month)))} · ${escapeHTML(r.category)}${r.method?" · "+escapeHTML(r.method):""}</small></span><strong class="recent-amount">${money(r.price)}</strong><span class="due-actions"><button class="button button-primary" type="button" data-due-add aria-label="Add ${escapeHTML(r.item)} for this month">Add</button><button class="button button-quiet" type="button" data-due-skip aria-label="Skip ${escapeHTML(r.item)} this month">Skip</button></span>`;
+      row.innerHTML=`<span class="recent-category-icon" aria-hidden="true">${c.icon}</span><span class="recent-main"><strong>${escapeHTML(r.item)}</strong><small>${escapeHTML(shortDate(p.date))} · ${escapeHTML(r.category)}${r.method?" · "+escapeHTML(r.method):""}</small></span><strong class="recent-amount">${money(r.price)}</strong><span class="due-actions"><button class="button button-primary" type="button" data-due-add aria-label="Add ${escapeHTML(r.item)} now">Add</button><button class="button button-quiet" type="button" data-due-skip aria-label="Skip ${escapeHTML(r.item)} this time">Skip</button></span>`;
       row.querySelector("[data-due-add]").addEventListener("click",()=>addRecurringNow(r.id));
-      row.querySelector("[data-due-skip]").addEventListener("click",()=>{r.doneMonth=month;saveRecurring();renderDue();renderRecurringList();});
+      row.querySelector("[data-due-skip]").addEventListener("click",()=>{r.done=p.key;saveRecurring();renderDue();renderRecurringList();});
       list.appendChild(row);
     });
   }
   function addRecurringNow(id){
-    const r=recurring.find(x=>x.id===id),month=currentMonth();if(!r||r.doneMonth===month)return;
-    let entry;try{entry=normalizeExpense({date:dueDate(r,month),item:r.item,price:r.price,category:r.category,method:r.method});}catch(e){return;}
+    const r=recurring.find(x=>x.id===id),p=r&&duePeriod(r);if(!p||r.done===p.key)return;
+    let entry;try{entry=normalizeExpense({date:p.date,item:r.item,price:r.price,category:r.category,method:r.method});}catch(e){return;}
     const previous=expenses;expenses=[...expenses,entry];
     if(!saveExpenses()){expenses=previous;return;}
-    r.doneMonth=month;saveRecurring();renderAll();
+    r.done=p.key;saveRecurring();renderAll();
     $("formMessage").textContent=`Added “${r.item}” for ${shortDate(entry.date)}.`;
+    showUndoToast(`Added “${r.item}” for ${shortDate(entry.date)}.`,false);
   }
   function addRecurring(event){
     event.preventDefault();
-    const list=cleanRecurring([{item:$("recurringItem").value,price:$("recurringPrice").value,category:$("recurringCategory").value,method:$("recurringMethod").value,day:$("recurringDay").value}]);
+    const list=cleanRecurring([{item:$("recurringItem").value,price:$("recurringPrice").value,category:$("recurringCategory").value,method:$("recurringMethod").value,freq:$("recurringFreq").value,day:$("recurringDay").value,weekday:$("recurringWeekday").value,month:$("recurringMonth").value}]);
     if(!list.length){$("recurringMessage").textContent="Check the description, the price and the day (1 to 31).";return;}
     recurring=[...recurring,list[0]].slice(-100);
     if(!saveRecurring()){$("recurringMessage").textContent="Could not save in browser storage.";return;}
-    $("recurringForm").reset();$("recurringDay").value="1";
-    renderDue();renderRecurringList();$("recurringMessage").textContent=`“${list[0].item}” will wait on Home each month.`;
+    $("recurringForm").reset();$("recurringDay").value="1";$("recurringWeekday").value="1";$("recurringMonth").value=String(new Date().getMonth()+1);syncRecurringFields();
+    renderDue();renderRecurringList();$("recurringMessage").textContent=`“${list[0].item}” will wait on Home ${({monthly:"each month",weekly:"each week",quarterly:"every 3 months",yearly:"once a year"})[list[0].freq]}.`;
   }
   function renderRecurringList(){
-    const list=$("recurringList"),month=currentMonth();list.innerHTML="";
-    [...recurring].sort((a,b)=>a.day-b.day).forEach(r=>{
-      const c=getCategory(r.category),row=document.createElement("div");row.className="recent-transaction due-row";
-      row.innerHTML=`<span class="recent-category-icon" aria-hidden="true">${c.icon}</span><span class="recent-main"><strong>${escapeHTML(r.item)}</strong><small>Day ${r.day} · ${escapeHTML(r.category)}${r.method?" · "+escapeHTML(r.method):""}${r.doneMonth===month?" · done for this month":""}</small></span><strong class="recent-amount">${money(r.price)}</strong><span class="due-actions"><button class="icon-button" type="button" aria-label="Remove the recurring expense ${escapeHTML(r.item)}">×</button></span>`;
+    const list=$("recurringList");list.innerHTML="";
+    const order={weekly:0,monthly:1,quarterly:2,yearly:3};
+    [...recurring].sort((a,b)=>order[a.freq]-order[b.freq]||(a.month||0)-(b.month||0)||a.day-b.day).forEach(r=>{
+      const c=getCategory(r.category),p=duePeriod(r),row=document.createElement("div");row.className="recent-transaction due-row";
+      row.innerHTML=`<span class="recent-category-icon" aria-hidden="true">${c.icon}</span><span class="recent-main"><strong>${escapeHTML(r.item)}</strong><small>${escapeHTML(recurLabel(r))} · ${escapeHTML(r.category)}${r.method?" · "+escapeHTML(r.method):""}${p&&r.done===p.key?(r.freq==="weekly"?" · done for this week":" · done for this month"):""}</small></span><strong class="recent-amount">${money(r.price)}</strong><span class="due-actions"><button class="icon-button" type="button" aria-label="Remove the recurring expense ${escapeHTML(r.item)}">×</button></span>`;
       row.querySelector("button").addEventListener("click",()=>{
         if(!confirm(`Remove the recurring expense “${r.item}”? Expenses already recorded stay.`))return;
         recurring=recurring.filter(x=>x.id!==r.id);saveRecurring();renderDue();renderRecurringList();
@@ -936,6 +1115,7 @@
   /* ----- Backup reminder on Home: after 30 days without an export, with a week's snooze ----- */
   function renderHomeNotices(){
     const host=$("homeNotices");host.innerHTML="";
+    if(loadWarning){const warn=document.createElement("div");warn.className="notice load-warning";warn.setAttribute("role","alert");warn.innerHTML=`<span class="notice-text"><strong>Please check your records.</strong> ${escapeHTML(loadWarning)}</span>`;host.appendChild(warn);}
     if(expenses.length<10)return;
     const day=86400000,last=Date.parse(isoStamp(lsGet(KEYS.lastBackup)||"")),snooze=Date.parse(isoStamp(lsGet(KEYS.backupSnooze)||""));
     const age=Number.isNaN(last)?null:Math.floor((Date.now()-last)/day);
@@ -946,6 +1126,175 @@
     box.querySelector("[data-notice-export]").addEventListener("click",()=>{exportJSON();renderHomeNotices();});
     box.querySelector("[data-notice-later]").addEventListener("click",()=>{lsSet(KEYS.backupSnooze,new Date().toISOString());renderHomeNotices();});
     host.appendChild(box);
+  }
+
+  /* =====================================================================================
+     Version 2.4: the + button and tucked-away form on phones, repeat an expense, her own
+     payment methods, and trips with prices typed in a foreign currency.
+     ===================================================================================== */
+  const isPhone = () => window.matchMedia("(max-width: 700px)").matches;
+  function setEntryOpen(open){document.body.classList.toggle("entry-open",!!open);$("fabAdd").setAttribute("aria-expanded",open?"true":"false");}
+  function repeatExpense(id){
+    const e=expenses.find(x=>x.id===id);if(!e)return;
+    const today=localDate(),t=tripById(e.trip),onTrip=!!t&&today>=t.start&&today<=t.end;
+    let entry;try{entry=normalizeExpense({date:today,item:e.item,price:e.price,category:e.category,method:e.method,...(onTrip?{trip:e.trip,fxAmount:e.fxAmount,fxCurrency:e.fxCurrency}:{})});}catch(err){return;}
+    const previous=expenses;expenses=[...expenses,entry];
+    if(!saveExpenses()){expenses=previous;return;}
+    renderAll();undoEntry={addedId:entry.id};showUndoToast(`Added “${entry.item}” again for today, ${money(entry.price)}.`);
+  }
+
+  /* ----- Payment methods ----- */
+  const rememberedMethod = () => { const v=cleanMethod(lsGet(KEYS.lastMethod)); return METHODS.includes(v)?v:""; };
+  function setMethodValue(select,value){
+    const v=cleanMethod(value);
+    if(v&&![...select.options].some(o=>o.value===v))select.add(new Option(v,v));   // a method since taken off the list, still on an older expense
+    select.value=v;
+  }
+  function fillMethodSelects(){
+    ["expenseMethod","recurringMethod"].forEach(id=>{
+      const select=$(id),keep=select.value;
+      if(select.options.length&&[...select.options].map(o=>o.value).join("\u0001")===["",...METHODS].join("\u0001"))return;
+      select.innerHTML="";select.add(new Option(NO_METHOD,""));METHODS.forEach(m=>select.add(new Option(m,m)));
+      if(id==="expenseMethod"&&$("expenseId").value)setMethodValue(select,keep);else select.value=METHODS.includes(keep)?keep:"";
+    });
+  }
+  function renderMethodList(){
+    const host=$("methodList");host.innerHTML="";
+    METHODS.forEach(m=>{
+      const chip=document.createElement("span");chip.className="method-chip";
+      chip.innerHTML=`<i style="background:${methodColor(m)}"></i><span>${escapeHTML(m)}</span><button class="icon-button" type="button" aria-label="Remove the payment method ${escapeHTML(m)}">×</button>`;
+      chip.querySelector("button").addEventListener("click",()=>{
+        METHODS=METHODS.filter(x=>x!==m);lsSet(KEYS.methods,JSON.stringify(METHODS));
+        fillMethodSelects();renderMethodList();renderReports();
+        $("methodMessage").textContent=`“${m}” was taken off the list. Expenses already saved with it keep it.`;
+      });
+      host.appendChild(chip);
+    });
+    if(!METHODS.length)host.innerHTML='<p class="chart-subtitle">The list is empty. Add a payment method below.</p>';
+  }
+  function addMethod(event){
+    event.preventDefault();
+    const name=tidyName($("methodName").value,30),msg=$("methodMessage");
+    if(!name||name.toLowerCase()===NO_METHOD.toLowerCase()){msg.textContent="Type a name first, for example BPI credit card.";return;}
+    if(METHODS.some(m=>m.toLowerCase()===name.toLowerCase())){msg.textContent=`“${name}” is already on the list.`;return;}
+    if(METHODS.length>=20){msg.textContent="The list holds up to 20 payment methods. Remove one first.";return;}
+    const previous=METHODS;METHODS=[...METHODS,name];
+    if(!lsSet(KEYS.methods,JSON.stringify(METHODS))){METHODS=previous;msg.textContent="Could not save in browser storage.";return;}
+    $("methodName").value="";fillMethodSelects();renderMethodList();renderReports();msg.textContent=`“${name}” added. It is now a choice in “Paid with”.`;
+  }
+
+  /* ----- Trips: {id,name,start,end,currency,rate}. rate = pesos for 1 unit of the trip's currency. ----- */
+  const CURRENCIES = [["JPY","Japanese yen"],["USD","US dollar"],["KRW","South Korean won"],["SGD","Singapore dollar"],["HKD","Hong Kong dollar"],["TWD","Taiwan dollar"],["THB","Thai baht"],["VND","Vietnamese dong"],["MYR","Malaysian ringgit"],["IDR","Indonesian rupiah"],["CNY","Chinese yuan"],["AUD","Australian dollar"],["EUR","Euro"],["GBP","British pound"],["PHP","Philippine peso (no conversion)"]];
+  function cleanTrips(v){
+    if(!Array.isArray(v))return [];
+    const seen=new Set();
+    return v.map(t=>{
+      if(!t||typeof t!=="object")return null;
+      const name=String(t.name||"").trim().slice(0,60),currency=String(t.currency||"PHP").trim().toUpperCase(),rate=Number(t.rate);
+      if(!name||!validDate(t.start)||!validDate(t.end)||t.start>t.end||!/^[A-Z]{3}$/.test(currency))return null;
+      if(currency!=="PHP"&&!(Number.isFinite(rate)&&rate>0&&rate<=1000000))return null;
+      let id=String(t.id||makeId()).slice(0,80);if(seen.has(id))id=makeId();seen.add(id);
+      return {id,name,start:t.start,end:t.end,currency,rate:currency==="PHP"?1:rate};
+    }).filter(Boolean).slice(0,200);
+  }
+  const tripById = id => id ? trips.find(t=>t.id===id) : undefined;
+  const tripForDate = date => trips.filter(t=>date>=t.start&&date<=t.end).sort((a,b)=>b.start.localeCompare(a.start))[0];
+  function fxMoney(amount,currency){ try { return new Intl.NumberFormat("en-PH",{style:"currency",currency,currencyDisplay:"narrowSymbol"}).format(amount); } catch(e) { return `${currency} ${amount}`; } }
+  const fxSymbol = currency => fxMoney(0,currency).replace(/[\d.,\s]/g,"") || currency;
+  const rateText = t => `₱${Number(t.rate).toLocaleString("en-PH",{maximumFractionDigits:4})} for ${fxSymbol(t.currency)}1`;
+  function saveTrips(){return lsSet(KEYS.trips,JSON.stringify(trips));}
+  function tripStats(t){
+    const rows=expenses.filter(e=>e.trip===t.id);
+    return {rows,total:sum(rows),typed:Math.round(rows.filter(e=>e.fxCurrency===t.currency).reduce((n,e)=>n+e.fxAmount*100,0))/100,days:Math.round((new Date(t.end+"T00:00:00")-new Date(t.start+"T00:00:00"))/86400000)+1};
+  }
+  /* The entry form: a Trip box appears once a trip exists; on a trip abroad the price can be typed in that currency. */
+  function setCurrencyChoice(foreign){document.querySelectorAll('input[name="expenseCurrency"]').forEach(r=>{r.checked=(r.value==="FX")===!!foreign;});}
+  function fxMode(){const t=tripById($("expenseTrip").value);return t&&t.currency!=="PHP"&&document.querySelector('input[name="expenseCurrency"][value="FX"]').checked?t:null;}
+  function fillTripSelect(){
+    const select=$("expenseTrip"),keep=select.value;select.innerHTML="";select.add(new Option("No trip",""));
+    [...trips].sort((a,b)=>b.start.localeCompare(a.start)).forEach(t=>select.add(new Option(t.name,t.id)));
+    select.value=trips.some(t=>t.id===keep)?keep:"";
+    $("tripFields").classList.toggle("hidden",!trips.length);
+  }
+  function syncTripFields(){
+    const t=tripById($("expenseTrip").value),foreign=!!t&&t.currency!=="PHP";
+    $("currencyToggle").classList.toggle("hidden",!foreign);
+    if(foreign)$("fxLabel").textContent=`${fxSymbol(t.currency)} ${t.currency}`;
+    const fx=fxMode(),typed=Number($("expensePrice").value);
+    $("priceLabel").textContent=fx?`Price (${fx.currency})`:"Price (PHP)";
+    $("priceSymbol").textContent=fx?fxSymbol(fx.currency):"₱";
+    $("fxHint").textContent=fx?(typed>0?`≈ ${money(typed*fx.rate)} at ${rateText(fx)}`:`Type the price in ${fx.currency}. It is saved in pesos at ${rateText(fx)}.`):"";
+  }
+  // A new expense joins the trip its date falls in, unless she has chosen a trip herself.
+  function autoTrip(){
+    if(!tripTouched&&!$("expenseId").value){const t=tripForDate($("expenseDate").value);$("expenseTrip").value=t?t.id:"";setCurrencyChoice(true);}
+    syncTripFields();
+  }
+  function syncTripRateField(){
+    const c=$("tripCurrency").value;
+    $("tripRateField").classList.toggle("hidden",c==="PHP");
+    $("tripRateLabel").textContent=`Pesos for 1 ${c}`;
+  }
+  function resetTripForm(){
+    $("tripForm").reset();$("tripId").value="";$("tripStart").value=localDate();$("tripEnd").value=localDate();$("tripCurrency").value="JPY";
+    $("tripSaveBtn").textContent="Add trip";$("tripCancelBtn").classList.add("hidden");syncTripRateField();
+  }
+  function saveTrip(event){
+    event.preventDefault();
+    const id=$("tripId").value,msg=$("tripMessage");
+    if($("tripStart").value>$("tripEnd").value){msg.textContent="The trip ends before it starts. Check the two dates.";return;}
+    const list=cleanTrips([{id:id||makeId(),name:$("tripName").value,start:$("tripStart").value,end:$("tripEnd").value,currency:$("tripCurrency").value,rate:$("tripRate").value}]);
+    if(!list.length){msg.textContent=$("tripCurrency").value==="PHP"?"Check the name and the two dates.":"Check the name, the two dates and the exchange rate.";return;}
+    const previous=trips;
+    trips=id&&trips.some(t=>t.id===id)?trips.map(t=>t.id===id?list[0]:t):[...trips,list[0]].slice(-200);
+    if(!saveTrips()){trips=previous;msg.textContent="Could not save in browser storage.";return;}
+    resetTripForm();renderAll();autoTrip();
+    msg.textContent=id?`“${list[0].name}” updated.`:`“${list[0].name}” added. Expenses dated within the trip join it automatically.`;
+  }
+  function onTripListClick(event){
+    const button=event.target.closest("button[data-trip-act]");if(!button)return;
+    const t=tripById(button.closest("[data-trip]").dataset.trip);if(!t)return;
+    if(button.dataset.tripAct==="view"){setJournalFilters({trip:t.id,sort:"date-desc"});go("transactions");}
+    else if(button.dataset.tripAct==="edit"){
+      $("tripId").value=t.id;$("tripName").value=t.name;$("tripStart").value=t.start;$("tripEnd").value=t.end;$("tripCurrency").value=t.currency;if($("tripCurrency").value!==t.currency){$("tripCurrency").add(new Option(t.currency,t.currency));$("tripCurrency").value=t.currency;}
+      $("tripRate").value=t.currency==="PHP"?"":t.rate;syncTripRateField();
+      $("tripSaveBtn").textContent="Save changes";$("tripCancelBtn").classList.remove("hidden");$("tripMessage").textContent="";
+      $("tripForm").scrollIntoView({block:"start"});$("tripName").focus({preventScroll:true});
+    }
+    else if(button.dataset.tripAct==="remove"){
+      const n=expenses.filter(e=>e.trip===t.id).length;
+      if(!confirm(`Remove the trip “${t.name}”? ${n?`Its ${n} ${n===1?"expense stays":"expenses stay"} in your records, without the trip label.`:"No expenses are affected."}`))return;
+      const previous=expenses;
+      expenses=expenses.map(e=>{if(e.trip!==t.id)return e;const copy={...e};delete copy.trip;return copy;});
+      if(n&&!saveExpenses()){expenses=previous;return;}
+      trips=trips.filter(x=>x.id!==t.id);saveTrips();if(journalTrip===t.id)journalTrip="";
+      if($("tripId").value===t.id)resetTripForm();
+      renderAll();autoTrip();$("tripMessage").textContent=`“${t.name}” removed.`;
+    }
+  }
+  function renderTrips(){
+    const host=$("tripList");if(!host)return;host.innerHTML="";
+    const today=localDate(),range=t=>`${shortDate(t.start)} to ${new Date(t.end+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"})}`;
+    if(!trips.length){host.innerHTML='<div class="empty-state"><span aria-hidden="true">🧳</span><h3>No trips yet</h3><p>Add one above. While you are away, new expenses join it on their own.</p></div>';return;}
+    [...trips].sort((a,b)=>b.start.localeCompare(a.start)).forEach(t=>{
+      const st=tripStats(t),state=today<t.start?"Upcoming":today>t.end?"Finished":"Happening now";
+      const cats=categories.map(c=>({c,v:sum(st.rows.filter(e=>e.category===c.name))})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v).slice(0,5);
+      const card=document.createElement("article");card.className="trip-card";card.dataset.trip=t.id;
+      card.innerHTML=`<header class="trip-card__head"><div><h3>${escapeHTML(t.name)}</h3><p>${escapeHTML(range(t))} · ${st.days} ${st.days===1?"day":"days"} · <span class="trip-state${state==="Happening now"?" is-now":""}">${state}</span></p></div><strong class="trip-card__total">${money(st.total)}</strong></header>
+        <p class="trip-card__meta">${st.rows.length} ${st.rows.length===1?"entry":"entries"} · ${money(st.total/st.days)} a day${t.currency!=="PHP"?` · ${escapeHTML(fxMoney(st.typed,t.currency))} typed in ${escapeHTML(t.currency)} · ${escapeHTML(rateText(t))}`:""}</p>
+        ${cats.length?`<ul class="trip-cats">${cats.map(x=>`<li><span>${x.c.icon} ${escapeHTML(x.c.name)}</span><strong>${money(x.v)}</strong></li>`).join("")}</ul>`:'<p class="chart-subtitle">No expenses on this trip yet.</p>'}
+        <div class="trip-actions"><button class="button button-outline" type="button" data-trip-act="view">View expenses</button><button class="button button-outline" type="button" data-trip-act="edit">Edit</button><button class="button button-quiet" type="button" data-trip-act="remove">Remove</button></div>`;
+      host.appendChild(card);
+    });
+  }
+  // Home: a small card while a trip is under way
+  function renderTripHome(){
+    const box=$("homeTrip");if(!box)return;
+    const today=localDate(),t=tripForDate(today);
+    if(!t){box.innerHTML="";box.className="";return;}
+    const st=tripStats(t),dayNo=Math.round((new Date(today+"T00:00:00")-new Date(t.start+"T00:00:00"))/86400000)+1;
+    box.className="panel trip-home";
+    box.innerHTML=`<div><p class="eyebrow">ON A TRIP · DAY ${dayNo} OF ${st.days}</p><h2 class="trip-home__title">${escapeHTML(t.name)}</h2><p class="chart-subtitle">${money(st.total)} so far${t.currency!=="PHP"&&st.typed?` · ${escapeHTML(fxMoney(st.typed,t.currency))}`:""} · ${money(st.total/dayNo)} a day</p></div><a class="button button-outline" href="#/trips">Trip details</a>`;
   }
 
   /* =====================================================================================
@@ -1283,6 +1632,7 @@
     insights:{title:"Insights",label:"Insights",icon:"pie",group:"Your spending"},
     calendar:{title:"Calendar",label:"Calendar",icon:"calendar",group:"Your spending"},
     budget:{title:"Budget and income",label:"Budget and income",icon:"wallet",group:"Your spending"},
+    trips:{title:"Trips",label:"Trips",icon:"plane",group:"Your spending"},
     tools:{title:"Tools and backup",label:"Tools and backup",icon:"tools",group:"Your data"},
     "whats-new":{title:"What’s new",label:"What’s new",icon:"news",group:"App",badge:"news"},
     about:{title:"About",label:"About",icon:"info",group:"App"}
@@ -1298,6 +1648,7 @@
     news:'<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h6M9 16h6"/>',
     qr:'<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 20h.01M20 14v.01"/>',
     info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
+    plane:'<path d="M21 3L3 10.5l7 2.5 2.5 7z"/><path d="M10 13l11-10"/>',
     external:'<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'
   };
   const navIcon = name => `<svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||ICONS.info}</svg>`;
@@ -1502,7 +1853,10 @@
         <li>Search from the top bar on any screen. It looks through descriptions, notes, categories, dates and amounts.</li>
         <li>On Insights, tap a chart slice, a top expense or a heatmap square to open the matching entries.</li>
         <li>On Calendar, tap a day to see it, then add an expense for that day.</li>
-        <li>Set a monthly budget, recurring expenses and income in <a href="#/budget">Budget and income</a>. Home then shows how the month is going.</li>
+        <li>On a phone, tap the round + button to add an expense. Tap ↻ beside any entry to add it again for today.</li>
+        <li>Set a monthly budget, recurring expenses (weekly, monthly, every 3 months or yearly), income and your own payment methods in <a href="#/budget">Budget and income</a>. Home then shows how the month is going.</li>
+        <li>Going away? Add the trip in <a href="#/trips">Trips</a> with its currency and your exchange rate. While you are there you can type prices in that currency, and they are saved in pesos.</li>
+        <li>In <a href="#/tools">Tools and backup</a>, “Save to Files or iCloud” sends your backup to the iPhone share sheet.</li>
         <li>Keep your GCash, Maya and bank QR codes in <a href="#/pay-me">Pay me</a>. Tap Show to put one full screen for scanning, or Share to send it in a chat.</li>
         <li>Start typing a description you have used before and pick it from the list. The category fills in for you.</li>
         <li>To install on iPhone or iPad, open this page in Safari, tap Share, then Add to Home Screen.</li>
@@ -1522,12 +1876,16 @@
     if(name==="about")renderAbout();
     if(name==="budget")fillBudgetForm(true);
     if(name==="pay-me")renderPayMe();
+    if(name==="trips")renderTrips();
+    document.body.dataset.route=name;
+    if(name!=="home"&&isPhone()&&!$("expenseId").value&&!$("expenseItem").value.trim()&&!$("expensePrice").value&&expenses.length)setEntryOpen(false);
     document.querySelectorAll(".page-view").forEach(view=>{const on=view.dataset.view===name;view.hidden=!on;view.classList.toggle("is-active",on);});
     const title=name==="missing"?"Page not found":ROUTES[name].title;
     document.title=title?`${title} — Little Garden`:"Little Garden — Expense Tracker";
     buildNav();updateBadges();
     if(opts.focus&&document.activeElement!==$("q"))$("main").focus({preventScroll:true});
     const after=pendingAfter;pendingAfter=null;
+    if(name==="insights")scrollFlowChart();
     if(restoreY!==null&&!after)window.requestAnimationFrame(()=>window.scrollTo(0,restoreY));
     else window.scrollTo(0,0);
     if(after)after();

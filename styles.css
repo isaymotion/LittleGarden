@@ -625,3 +625,87 @@ body.pay-viewer-open{overflow:hidden}
 .pay-viewer__btn:hover{background:#e9f0df}
 .pay-viewer__nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
 .pay-viewer__count{color:#5f6f62;font-size:.8rem}
+
+
+/* =====================================================================================
+   Version 2.4 — + button and tucked-away form on phones, repeat, trips, payment methods,
+   budget warnings, income chart
+   ===================================================================================== */
+/* Phones: the entry form waits behind the round + button */
+.entry-close{display:none}
+.fab{display:none}
+@media(max-width:700px){
+  body:not(.entry-open) #homeView>.entry-panel{display:none}
+  .entry-panel .leaf-badge{display:none}
+  .entry-close{display:inline-grid;place-items:center;min-width:44px;min-height:44px;font-size:1.05rem}
+  .fab{display:grid;place-items:center;position:fixed;z-index:65;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(72px + env(safe-area-inset-bottom,0px));width:58px;height:58px;padding:0;border:0;border-radius:50%;background:#315b43;color:#fff;box-shadow:0 10px 24px -8px rgba(12,34,22,.6);transition:transform .15s,bottom .2s}
+  .fab svg{width:28px;height:28px}
+  .fab:active{transform:scale(.94)}
+  :root[data-theme="dark"] .fab{background:#8fc79a;color:#12241a}
+  body.tabbar-hidden .fab{bottom:calc(18px + env(safe-area-inset-bottom,0px))}
+  body.entry-open[data-route="home"] .fab,body.drawer-open .fab,body.pay-viewer-open .fab{display:none}
+  .undo-toast{bottom:calc(142px + env(safe-area-inset-bottom,0px))}
+  body.tabbar-hidden .undo-toast{bottom:calc(88px + env(safe-area-inset-bottom,0px))}
+}
+@media(prefers-reduced-motion:reduce){.fab{transition:none}}
+
+/* Recent transactions: the row opens it, the round arrow adds it again for today */
+.recent-row{padding:0;gap:0}
+.recent-open{display:flex;align-items:center;gap:12px;flex:1 1 auto;min-width:0;padding:12px 4px 12px 10px;border:0;border-radius:14px;background:none;color:inherit;text-align:left;font:inherit;cursor:pointer}
+.repeat-button{flex:0 0 auto;min-width:44px;min-height:44px;margin-right:6px;font-size:1.15rem;line-height:1}
+@media(max-width:390px){.recent-open{gap:8px;padding:10px 2px 10px 8px}}
+
+/* Trips */
+.trip-fields{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;align-items:end;grid-column:1/-1}
+.trip-fields .trip-field{min-width:0}
+.trip-fields select{width:100%}
+.currency-toggle{border:0;margin:0;padding:0;min-width:0}
+.currency-toggle legend{padding:0;margin-bottom:4px;font-size:.8rem;font-weight:650}
+.fx-hint{margin:0;font-size:.84rem;font-weight:650;color:var(--deep);grid-column:1/-1}
+.fx-hint:empty{display:none}
+:root[data-theme="dark"] .fx-hint{color:#a9d6b0}
+@media(max-width:420px){.trip-fields{grid-template-columns:1fr}}
+.fx-note{font-size:.74rem;font-weight:500;color:var(--muted)}
+.trip-list{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr))}
+.trip-card{display:grid;gap:10px;align-content:start;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.trip-card__head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.trip-card__head h3{margin:0 0 2px;font-size:1.05rem;overflow-wrap:anywhere}
+.trip-card__head p,.trip-card__meta{margin:0;font-size:.8rem;color:var(--muted)}
+.trip-card__total{font-size:1.15rem;white-space:nowrap;font-variant-numeric:tabular-nums}
+.trip-state.is-now{font-weight:700;color:var(--deep)}
+:root[data-theme="dark"] .trip-state.is-now{color:#a9d6b0}
+.trip-cats{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:.86rem}
+.trip-cats li{display:flex;justify-content:space-between;gap:10px;padding-top:4px;border-top:1px solid var(--line)}
+.trip-cats strong{white-space:nowrap;font-variant-numeric:tabular-nums}
+.trip-actions{display:flex;flex-wrap:wrap;gap:8px}
+.trip-actions .button{min-height:40px;padding:8px 14px}
+.trip-home{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;margin-bottom:18px}
+.trip-home__title{margin:0 0 2px;font-size:1.15rem}
+.trip-home .eyebrow{margin-bottom:2px}
+@media(max-width:700px){.trip-home{margin-bottom:14px}}
+
+/* Payment methods */
+.method-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.method-chip{display:inline-flex;align-items:center;gap:8px;padding:3px 4px 3px 12px;border:1px solid var(--line);border-radius:99px;background:var(--surface);font-size:.88rem;font-weight:650}
+.method-chip i{flex:0 0 10px;width:10px;height:10px;border-radius:50%}
+.method-chip .icon-button{min-width:36px;min-height:36px}
+
+/* Budget: a limit that is 80% used turns amber before it turns red */
+.budget-near .budget-row-note{color:#8a6412;font-weight:700}
+:root[data-theme="dark"] .budget-near .budget-row-note{color:#e6c477}
+
+/* Income, spending and savings chart */
+.flow-income{fill:#729b71}
+.flow-spent{fill:#e0a98f}
+.flow-rate{fill:none;stroke:#8a6fb5;stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}
+.flow-rate-dot{fill:#8a6fb5;stroke:#fffdf7;stroke-width:1.5}
+:root[data-theme="dark"] .flow-rate{stroke:#b9a3e0}
+:root[data-theme="dark"] .flow-rate-dot{fill:#b9a3e0;stroke:#1d2b22}
+.flow-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:8px;font-size:.78rem;color:var(--muted)}
+.flow-legend span{display:inline-flex;align-items:center;gap:6px}
+.flow-key{display:inline-block;width:12px;height:12px;border-radius:3px}
+.flow-key--income{background:#729b71}
+.flow-key--spent{background:#e0a98f}
+.flow-key--rate{width:16px;height:3px;border-radius:2px;background:#8a6fb5}
+:root[data-theme="dark"] .flow-key--rate{background:#b9a3e0}
+.field-grow .fx-hint{margin-top:5px}
