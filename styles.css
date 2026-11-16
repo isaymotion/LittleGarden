@@ -481,3 +481,70 @@ body{min-height:100vh;display:flex;flex-direction:column}
 .page-view>.calendar-panel{margin-top:0}
 .row-actions .icon-button{min-width:40px;min-height:40px}
 :root[data-theme="dark"] .button-primary{color:#11261a}
+
+
+/* =====================================================================================
+   Version 2.1 — transaction cards on phones, budget, recurring, income, backup reminder
+   ===================================================================================== */
+.method-tag{display:inline-block;margin-left:6px;font-size:.72rem;font-weight:650;color:var(--ink-3);white-space:nowrap}
+.field-row{flex-wrap:wrap}
+.field-row .field-grow{flex:1 1 150px}
+@media(min-width:1000px){.chart-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:600px){#expenseForm .field-row .field-method{grid-column:1/-1}}
+
+/* Transactions as cards on phones: no sideways scrolling */
+@media(max-width:700px){
+  #journalView .table-wrap{overflow:visible;margin:0}
+  #journalView table{min-width:0;display:block;font-size:.86rem}
+  #journalView thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  #journalView tbody{display:grid;gap:8px}
+  #journalView tr{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"item amount" "cat cat" "date actions";gap:4px 10px;align-items:center;padding:12px 12px 8px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+  #journalView td{display:block;padding:0;border:0;min-width:0}
+  #journalView .cell-item{grid-area:item;font-weight:700;font-size:.95rem;overflow-wrap:anywhere}
+  #journalView .cell-item .chart-subtitle{font-weight:400;margin-top:2px}
+  #journalView .amount-col{grid-area:amount;text-align:right;font-size:.98rem;white-space:nowrap;align-self:start}
+  #journalView .cell-cat{grid-area:cat}
+  #journalView .cell-date{grid-area:date;color:var(--muted);font-size:.8rem}
+  #journalView .actions-col{grid-area:actions}
+  #journalView .row-actions .icon-button{min-width:44px;min-height:40px}
+}
+
+/* Budget */
+.budget-row{display:grid;gap:5px;padding:10px 0;border-top:1px solid var(--line)}
+.budget-row:first-child{border-top:0;padding-top:0}
+.budget-row-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;font-size:.88rem}
+.budget-row-label{min-width:0;overflow-wrap:anywhere}
+.budget-row-figures{color:var(--muted);font-size:.8rem;white-space:nowrap}
+.budget-track{height:10px;border-radius:99px;background:var(--sage);overflow:hidden}
+.budget-track i{display:block;height:100%;border-radius:99px;background:var(--leaf)}
+.budget-near .budget-track i{background:#d9a441}
+.budget-over .budget-track i{background:#c75a52}
+.budget-row-note{font-size:.76rem;color:var(--muted)}
+.budget-over .budget-row-note{color:var(--bad);font-weight:700}
+.budget-income{margin:12px 0 0;padding-top:12px;border-top:1px solid var(--line);font-size:.86rem}
+.budget-row + .budget-income,.budget-income:first-child{margin-top:0}
+.budget-income:first-child{border-top:0;padding-top:0}
+.budget-grid{display:grid;gap:14px}
+.budget-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 14px}
+.budget-field label{margin-top:8px}
+.budget-field-total{max-width:320px}
+.budget-field-total label{font-size:.9rem}
+
+/* Small forms on the Budget and income screen */
+.mini-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 14px;margin-bottom:16px}
+.mini-form .mini-wide{grid-column:1/-1}
+.mini-form .form-actions{margin-top:12px}
+@media(min-width:900px){.mini-form{grid-template-columns:repeat(4,minmax(0,1fr))}.mini-form .mini-field.mini-wide{grid-column:span 2}#recurringForm .mini-field.mini-wide{grid-column:1/-1}}
+@media(max-width:420px){.mini-form{grid-template-columns:1fr}}
+.due-row{cursor:default;flex-wrap:wrap}
+.due-row .recent-main{flex:1 1 120px}
+.due-actions{display:flex;gap:6px;align-items:center;margin-left:auto}
+.due-actions .button{min-height:40px;padding:8px 14px}
+.due-actions .icon-button{min-width:40px;min-height:40px}
+
+/* Backup reminder */
+.home-notices:empty{display:none}
+.notice{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;padding:14px 18px;border:1px solid #e3cf9a;border-radius:16px;background:#fbf3dc;color:#4d3d12;font-size:.88rem}
+.notice-text{flex:1 1 220px}
+.notice-actions{display:flex;gap:8px;flex-wrap:wrap}
+:root[data-theme="dark"] .notice{background:#33301f;border-color:#5a5330;color:#f0e4bd}

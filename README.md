@@ -9,10 +9,14 @@ A mobile-first, garden-inspired monthly expense tracker for GitHub Pages. Record
 - **12 fixed categories:** Groceries; Restaurants & Dining; Medications & Healthcare; Property & Real Estate; Utilities & Internet; Pets; Transportation; Shopping & Personal Care; Hobbies & Entertainment; Education & Professional Development; Gifts & Donations; Miscellaneous.
 - **Home dashboard:** quick expense entry, monthly summary, and the five most recent transactions; select a recent item to jump to its matching transaction.
 - **Insights:** monthly totals, category and area charts, daily spending, comparisons, calendar, and yearly trends.
-- **Transactions:** searchable, filterable, sortable history with edit and delete actions.
+- **Transactions:** searchable, filterable, sortable history with edit and delete actions; shown as cards on phones.
 - **Find records:** text search, category/month filters, and sort options.
 - **Backup/restore:** JSON backup and CSV export; imports validate records, support merge/replace, and show useful errors.
 - **PDF report export:** printable weekly, monthly, or yearly reports with spreadsheet-style (default) and visual layouts, charts, insights, and all transactions.
+- **Budget and income:** a monthly total and optional per-category limits with progress bars on Home; recurring expenses that wait on Home each month until added or skipped; optional income entries with "left after spending".
+- **Payment method:** optional Cash / GCash / Card / Bank transfer / Other on each expense, a chart by payment method, and a `method` column in the CSV.
+- **Faster entry:** description suggestions from past entries fill in the category and payment method.
+- **Backup reminder:** shown on Home when the last export is more than 30 days old.
 - **PWA:** manifest, app icon, install prompt where supported, and a service worker for offline app-shell caching.
 - **Quick expense entry:** the form sits directly below the garden banner, with compact mobile spacing and comfortable touch targets.
 - **Navigation shared with the other isaymotion apps:** dark top bar with ☰ menu, back/forward buttons (Alt+Left / Alt+Right), search, text size (Aa) and theme; docked sidebar on wide screens, drawer plus bottom tab bar (Home, Transactions, Insights, Menu) on phones and tablets. Each screen has its own address (`#/transactions`, `#/insights`, `#/calendar`, `#/tools`, `#/whats-new`, `#/about`), so the browser's Back button works.
@@ -68,7 +72,7 @@ If you deploy to a project site (a repository other than `YOUR-USERNAME.github.i
 
 - Your expense records are stored in the browser profile on the device where you enter them. They do not automatically sync between devices or browsers.
 - Clearing browser site data can erase your entries. **Export JSON backups regularly.**
-- CSV is intended for spreadsheet portability. JSON preserves record IDs and metadata and is the preferred full-fidelity backup.
+- CSV is intended for spreadsheet portability. JSON preserves record IDs and metadata, plus saved views, budget, recurring expenses and income, and is the preferred full-fidelity backup.
 - During import, **Merge** adds/updates records by ID; **Replace** asks first, then replaces the current records with the imported file. CSV rows without IDs are matched on date, item, price, category and notes, so importing the same CSV twice does not create duplicates. **Undo last import** restores the records you had before the most recent import.
 - Imported data is validated. The fixed category names must match exactly. Keep a backup before replacing records.
 - The service worker caches the app shell for offline loading after the app has been opened online at least once. Browser storage and offline behavior vary by browser.

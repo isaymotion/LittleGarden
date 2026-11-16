@@ -1,7 +1,11 @@
 (() => {
   "use strict";
   const STORAGE_KEY = "little-garden-expenses-v1";
-  const KEYS = {views:"little-garden-saved-views",lastCategory:"little-garden-last-category",theme:"little-garden-theme",textSize:"little-garden-text-size",navCollapsed:"little-garden-nav-collapsed",seenNews:"little-garden-seen-news",importUndo:"little-garden-import-undo",lastBackup:"little-garden-last-backup",recovery:"little-garden-expenses-recovery"};
+  const KEYS = {views:"little-garden-saved-views",lastCategory:"little-garden-last-category",theme:"little-garden-theme",textSize:"little-garden-text-size",navCollapsed:"little-garden-nav-collapsed",seenNews:"little-garden-seen-news",importUndo:"little-garden-import-undo",lastBackup:"little-garden-last-backup",recovery:"little-garden-expenses-recovery",budgets:"little-garden-budgets",recurring:"little-garden-recurring",income:"little-garden-income-v1",lastMethod:"little-garden-last-method",backupSnooze:"little-garden-backup-snooze"};
+  const METHODS = ["Cash","GCash","Card","Bank transfer","Other"];
+  const NO_METHOD = "Not set";
+  const methodColors = {"Cash":"#80a878","GCash":"#8099c5","Card":"#d98d8b","Bank transfer":"#e7b66c","Other":"#b7a2d3","Not set":"#a9b0a2"};
+  const cleanMethod = value => { const v=String(value ?? "").trim().toLowerCase(); return METHODS.find(m=>m.toLowerCase()===v) || ""; };
   const META = window.APP_META || {name:"Little Garden",version:""};
   const CHANGELOG = Array.isArray(window.APP_CHANGELOG) ? window.APP_CHANGELOG : [];
   const lsGet = key => { try { return localStorage.getItem(key); } catch(e) { return null; } };
@@ -43,6 +47,12 @@
   let undoEntry = null;
   let undoTimer = null;
   let customViews = loadCustomViews();
+  let journalMethod = "";          // payment-method filter on the Transactions screen ("" = any)
+  let budgets = cleanBudgets(readJSON(KEYS.budgets));
+  let recurring = cleanRecurring(readJSON(KEYS.recurring));
+  let income = cleanIncome(readJSON(KEYS.income));
+  let categoryTouched = false, methodTouched = false;   // set when she picks one herself, so suggestions stop overriding it
+  let itemLookup = new Map();
 
   function validDate(s){
     if(typeof s!=="string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
@@ -67,7 +77,7 @@
     if (!categoryNames.includes(category)) throw new Error(`Row ${index+1}: unknown category "${category}". Use one of the 12 fixed categories.`);
     const notes = String(raw.notes ?? raw.Notes ?? "").trim();
     const now=new Date().toISOString(),created=isoStamp(raw.createdAt ?? raw.createdat)||now;
-    return {id:String(raw.id || makeId()).slice(0,80),date,item,price:Math.round(price*100)/100,category,notes:notes.slice(0,500),createdAt:created,updatedAt:isoStamp(raw.updatedAt ?? raw.updatedat)||created};
+    return {id:String(raw.id || makeId()).slice(0,80),date,item,price:Math.round(price*100)/100,category,method:cleanMethod(raw.method ?? raw.Method ?? raw["paid with"]),notes:notes.slice(0,500),createdAt:created,updatedAt:isoStamp(raw.updatedAt ?? raw.updatedat)||created};
   }
   function makeId(){ return (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : `e-${Date.now()}-${Math.random().toString(36).slice(2,10)}`; }
   function loadExpenses(){
@@ -106,7 +116,12 @@
     categories.forEach(c=>{
       $("expenseCategory").add(new Option(`${c.icon} ${c.name}`,c.name));
       $("categoryFilter").add(new Option(c.name,c.name));
+      $("recurringCategory").add(new Option(`${c.icon} ${c.name}`,c.name));
     });
+    ["expenseMethod","recurringMethod"].forEach(id=>{$(id).add(new Option(NO_METHOD,""));METHODS.forEach(m=>$(id).add(new Option(m,m)));});
+    $("expenseMethod").value=cleanMethod(lsGet(KEYS.lastMethod));
+    $("incomeDate").value=localDate();
+    $("budgetCategoryFields").innerHTML=categories.map((c,i)=>`<div class="budget-field"><label for="budgetCat${i}">${c.icon} ${escapeHTML(c.name)}</label><div class="price-input"><span>₱</span><input id="budgetCat${i}" inputmode="decimal" max="999999999" min="0" placeholder="No limit" step="0.01" type="number"/></div></div>`).join("");
     { const lastCategory=lsGet(KEYS.lastCategory); if(categoryNames.includes(lastCategory)) $("expenseCategory").value=lastCategory; }
     $("calendarMonth").value=currentMonth();
     bindEvents();
@@ -130,20 +145,29 @@
     }));
     ["topExpenseLimit","yearSummaryYear","trendYear","heatmapYear"].forEach(id=>$(id).addEventListener("change",renderInsights));
     $("dateRangeForm").addEventListener("submit",renderDateRangeComparison);
-    ["categoryChart","areaChart","categoryLegend","areaLegend"].forEach(id=>$(id).addEventListener("keydown",event=>{
+    ["categoryChart","areaChart","methodChart","categoryLegend","areaLegend","methodLegend"].forEach(id=>$(id).addEventListener("keydown",event=>{
       if((event.key==="Enter"||event.key===" ")&&event.target.closest("[data-chart-name]")){event.preventDefault();event.target.closest("[data-chart-name]").click();}
     }));
-    ["categoryChart","areaChart","categoryLegend","areaLegend"].forEach(id=>$(id).addEventListener("click",event=>{
+    ["categoryChart","areaChart","methodChart","categoryLegend","areaLegend","methodLegend"].forEach(id=>$(id).addEventListener("click",event=>{
       const target=event.target.closest("[data-chart-name]");
       if(!target)return;
       const name=target.dataset.chartName;
-      setJournalFilters({query:(id==="categoryChart"||id==="categoryLegend")?"":name,category:(id==="categoryChart"||id==="categoryLegend")?name:"",month:selectedMonth()});
+      if(id.startsWith("category"))setJournalFilters({category:name,month:selectedMonth()});
+      else if(id.startsWith("method"))setJournalFilters({method:name,month:selectedMonth()});
+      else setJournalFilters({query:name,month:selectedMonth()});
       go("transactions");
     }));
     $("clearCalendarDate").addEventListener("click",()=>{selectedCalendarDate="";renderCalendar();});
     $("addOnSelectedDayBtn").addEventListener("click",()=>{if(!selectedCalendarDate)return;const day=selectedCalendarDate;resetForm();$("expenseDate").value=day;editReturn="";go("home",focusEntryForm);});
     $("openDayInJournalBtn").addEventListener("click",()=>{if(!selectedCalendarDate)return;setJournalFilters({date:selectedCalendarDate});go("transactions");});
-    $("clearJournalDate").addEventListener("click",()=>{journalDate="";renderExpenses();});
+    $("clearJournalDate").addEventListener("click",()=>{journalDate="";journalMethod="";renderExpenses();});
+    $("expenseCategory").addEventListener("change",()=>{categoryTouched=true;});
+    $("expenseMethod").addEventListener("change",()=>{methodTouched=true;});
+    ["input","change"].forEach(type=>$("expenseItem").addEventListener(type,applySuggestion));
+    $("budgetForm").addEventListener("submit",saveBudgetForm);
+    $("clearBudgetBtn").addEventListener("click",()=>{budgets=cleanBudgets(null);lsSet(KEYS.budgets,JSON.stringify(budgets));fillBudgetForm(true);renderBudgetHome();$("budgetMessage").textContent="All limits cleared.";});
+    $("recurringForm").addEventListener("submit",addRecurring);
+    $("incomeForm").addEventListener("submit",addIncome);
     $("deleteViewBtn").addEventListener("click",deleteSavedView);
     $("undoImportBtn").addEventListener("click",undoImport);
     $("saveViewBtn").addEventListener("click",saveCurrentView);
@@ -162,6 +186,7 @@
     window.addEventListener("storage",event=>{
       if(event.key===STORAGE_KEY){expenses=loadExpenses();renderAll();}
       else if(event.key===KEYS.views){customViews=loadCustomViews();renderSavedViews();}
+      else if([KEYS.budgets,KEYS.recurring,KEYS.income].includes(event.key)){budgets=cleanBudgets(readJSON(KEYS.budgets));recurring=cleanRecurring(readJSON(KEYS.recurring));income=cleanIncome(readJSON(KEYS.income));renderAll();}
     });
   }
   function setReportMonth(value){
@@ -169,7 +194,8 @@
     selectedCalendarDate="";renderAll();
   }
   // One place to set the Transactions filters, so every shortcut (charts, heatmap, calendar, recent items) behaves the same.
-  function setJournalFilters({query="",category="",month="",sort="",date=""}={}){
+  function setJournalFilters({query="",category="",month="",sort="",date="",method=""}={}){
+    journalMethod=method;
     $("searchInput").value=query;$("q").value=query;$("categoryFilter").value=category;
     renderMonthFilter();$("monthFilter").value=month;if($("monthFilter").value!==month)$("monthFilter").value="";
     if(sort)$("sortFilter").value=sort;
@@ -183,7 +209,7 @@
   function onSave(event){
     event.preventDefault();
     const id=$("expenseId").value;
-    const raw={id:id||makeId(),date:$("expenseDate").value,item:$("expenseItem").value,price:$("expensePrice").value,category:$("expenseCategory").value,notes:$("expenseNotes").value};
+    const raw={id:id||makeId(),date:$("expenseDate").value,item:$("expenseItem").value,price:$("expensePrice").value,category:$("expenseCategory").value,method:$("expenseMethod").value,notes:$("expenseNotes").value};
     let entry;
     try{entry=normalizeExpense(raw);}catch(e){$("formMessage").textContent=e.message;return;}
     const previous=expenses;
@@ -195,6 +221,7 @@
     }
     else expenses=[...expenses,entry];
     lsSet(KEYS.lastCategory,entry.category);
+    if(entry.method)lsSet(KEYS.lastMethod,entry.method);else lsDel(KEYS.lastMethod);
     if(!saveExpenses()){expenses=previous;return;}
     const back=id?editReturn:"";
     resetForm();renderAll();
@@ -203,7 +230,7 @@
   }
   function cancelEdit(){const back=editReturn;resetForm();if(back&&back!=="home")go(back);}
   function resetForm(){
-    $("expenseForm").reset();$("expenseId").value="";$("expenseDate").value=localDate();editReturn="";$("optionalFields").open=false;
+    $("expenseForm").reset();$("expenseId").value="";$("expenseDate").value=localDate();editReturn="";$("optionalFields").open=false;categoryTouched=false;methodTouched=false;$("expenseMethod").value=cleanMethod(lsGet(KEYS.lastMethod));
     $("saveExpenseBtn").textContent="Add expense";$("cancelEditBtn").classList.add("hidden");$("entryTitle").textContent="New expense";
     { const lastCategory=lsGet(KEYS.lastCategory); if(categoryNames.includes(lastCategory)) $("expenseCategory").value=lastCategory; }
     $("formMessage").textContent="";
@@ -211,7 +238,7 @@
   function editExpense(id){
     const from=currentRoute();
     const e=expenses.find(x=>x.id===id);if(!e)return;
-    $("expenseId").value=e.id;$("expenseDate").value=e.date;$("expenseItem").value=e.item;$("expensePrice").value=e.price;$("expenseCategory").value=e.category;$("expenseNotes").value=e.notes;
+    $("expenseId").value=e.id;$("expenseDate").value=e.date;$("expenseItem").value=e.item;$("expensePrice").value=e.price;$("expenseCategory").value=e.category;$("expenseMethod").value=e.method||"";$("expenseNotes").value=e.notes;
     $("saveExpenseBtn").textContent="Save changes";$("cancelEditBtn").classList.remove("hidden");
     $("entryTitle").textContent="Edit expense";$("optionalFields").open=!!e.notes;$("formMessage").textContent="";
     editReturn=from==="home"?"":from;
@@ -236,7 +263,7 @@
     expenses.splice(Math.min(undoEntry.index,expenses.length),0,undoEntry.entry);
     if(saveExpenses()){renderAll();$("undoToast").hidden=true;if(undoTimer)clearTimeout(undoTimer);undoTimer=null;undoEntry=null;}
   }
-  function renderAll(){refreshYearOptions();renderSummary();renderReports();renderMonthFilter();renderExpenses();renderCalendar();renderComparison();renderSavedViews();renderInsights();renderRecentTransactions();renderBackupMeta();$("allCount").textContent=`${expenses.length} ${expenses.length===1?"entry":"entries"}`;}
+  function renderAll(){refreshYearOptions();renderSummary();renderReports();renderMonthFilter();renderExpenses();renderCalendar();renderComparison();renderSavedViews();renderInsights();renderRecentTransactions();renderBackupMeta();renderSuggestions();renderBudgetHome();renderDue();renderRecurringList();renderIncomeList();fillBudgetForm(false);renderHomeNotices();$("allCount").textContent=`${expenses.length} ${expenses.length===1?"entry":"entries"}`;}
   function renderRecentTransactions(){
     const host=$("recentTransactions"); if(!host)return; host.innerHTML="";
     const rows=[...expenses].sort((a,b)=>b.date.localeCompare(a.date)||String(b.createdAt||"").localeCompare(String(a.createdAt||""))).slice(0,5);
@@ -251,7 +278,7 @@
     $("dailyAverage").textContent=money(elapsed?sum(rows)/elapsed:0);
     $("monthLabel").textContent=new Date(y,m-1,1).toLocaleDateString("en-PH",{month:"long",year:"numeric"});
   }
-  function renderReports(){renderSummary();const rows=expenses.filter(e=>e.date.startsWith(selectedMonth()));renderPie("categoryChart","categoryLegend",categories.map(c=>({name:c.name,color:c.color,value:sum(rows.filter(e=>e.category===c.name)),icon:c.icon})),sum(rows));renderPie("areaChart","areaLegend",areas.map(a=>({name:a.name,color:a.color,value:sum(rows.filter(e=>getCategory(e.category).area===a.name))})),sum(rows));renderDailyChart(rows);}
+  function renderReports(){renderSummary();const rows=expenses.filter(e=>e.date.startsWith(selectedMonth()));renderPie("categoryChart","categoryLegend",categories.map(c=>({name:c.name,color:c.color,value:sum(rows.filter(e=>e.category===c.name)),icon:c.icon})),sum(rows));renderPie("areaChart","areaLegend",areas.map(a=>({name:a.name,color:a.color,value:sum(rows.filter(e=>getCategory(e.category).area===a.name))})),sum(rows));renderPie("methodChart","methodLegend",[...METHODS,NO_METHOD].map(m=>({name:m,color:methodColors[m],value:sum(rows.filter(e=>(e.method||NO_METHOD)===m))})),sum(rows));renderDailyChart(rows);}
   function renderPie(chartId,legendId,items,total){
     const chart=$(chartId),legend=$(legendId);chart.innerHTML="";legend.innerHTML="";
     if(total<=0){chart.innerHTML='<div class="no-chart">Your chart will bloom after your first entry.</div>';return;}
@@ -385,9 +412,10 @@
       if(category&&e.category!==category)return false;
       if(month&&!e.date.startsWith(month))return false;
       if(journalDate&&e.date!==journalDate)return false;
+      if(journalMethod&&(e.method||NO_METHOD)!==journalMethod)return false;
       if(!terms.length)return true;
       const cat=getCategory(e.category);
-      const searchable=[e.item,e.notes,e.category,cat.area,cat.icon,e.date,e.date.slice(0,7),e.date.slice(8,10),
+      const searchable=[e.item,e.notes,e.category,e.method,cat.area,cat.icon,e.date,e.date.slice(0,7),e.date.slice(8,10),
         new Date(e.date+"T00:00:00").toLocaleDateString("en-PH",{month:"long",day:"numeric",year:"numeric"}),
         String(e.price),e.price.toFixed(2),money(e.price),String(Math.round(e.price)),e.id].join(" ").toLocaleLowerCase();
       return terms.every(term=>searchable.includes(term));
@@ -396,15 +424,15 @@
     const tbody=$("expenseRows");tbody.innerHTML="";
     rows.forEach(e=>{
       const c=getCategory(e.category),tr=document.createElement("tr");
-      tr.innerHTML=`<td>${escapeHTML(new Date(e.date+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"}))}</td><td title="${escapeHTML(e.notes)}">${escapeHTML(e.item)}${e.notes?`<div class="chart-subtitle">${escapeHTML(e.notes)}</div>`:""}</td><td><span class="category-chip">${c.icon} ${escapeHTML(e.category)}</span></td><td class="amount-col"><strong>${money(e.price)}</strong></td><td class="actions-col"><div class="row-actions"><button class="icon-button" type="button" data-edit="${escapeHTML(e.id)}" aria-label="Edit ${escapeHTML(e.item)}">Edit</button><button class="icon-button" type="button" data-delete="${escapeHTML(e.id)}" aria-label="Delete ${escapeHTML(e.item)}">×</button></div></td>`;
+      tr.innerHTML=`<td class="cell-date">${escapeHTML(new Date(e.date+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"}))}</td><td class="cell-item" title="${escapeHTML(e.notes)}">${escapeHTML(e.item)}${e.notes?`<div class="chart-subtitle">${escapeHTML(e.notes)}</div>`:""}</td><td class="cell-cat"><span class="category-chip">${c.icon} ${escapeHTML(e.category)}</span>${e.method?`<span class="method-tag">${escapeHTML(e.method)}</span>`:""}</td><td class="amount-col"><strong>${money(e.price)}</strong></td><td class="actions-col"><div class="row-actions"><button class="icon-button" type="button" data-edit="${escapeHTML(e.id)}" aria-label="Edit ${escapeHTML(e.item)}">Edit</button><button class="icon-button" type="button" data-delete="${escapeHTML(e.id)}" aria-label="Delete ${escapeHTML(e.item)}">×</button></div></td>`;
       tbody.appendChild(tr);
     });
     tbody.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>editExpense(b.dataset.edit)));
     tbody.querySelectorAll("[data-delete]").forEach(b=>b.addEventListener("click",()=>askDelete(b.dataset.delete)));
     $("emptyState").classList.toggle("hidden",rows.length>0);
     $("filteredSummary").textContent=`Showing ${rows.length} of ${expenses.length} ${expenses.length===1?"entry":"entries"}`;$("filteredTotal").textContent=money(sum(rows));
-    $("journalDateChip").classList.toggle("hidden",!journalDate);
-    $("journalDateLabel").textContent=journalDate?`Only ${longDate(journalDate)}`:"";
+    $("journalDateChip").classList.toggle("hidden",!journalDate&&!journalMethod);
+    $("journalDateLabel").textContent=[journalDate?`Only ${longDate(journalDate)}`:"",journalMethod?(journalMethod===NO_METHOD?"No payment method set":`Paid with ${journalMethod}`):""].filter(Boolean).join(" · ");
   }
   function longDate(date){return new Date(date+"T00:00:00").toLocaleDateString("en-PH",{month:"long",day:"numeric",year:"numeric"});}
   function renderCalendarDay(){
@@ -493,13 +521,13 @@
     $("backupMeta").textContent=last?`${count} Last backup exported ${new Date(last).toLocaleDateString("en-PH",{month:"long",day:"numeric",year:"numeric"})}.`:`${count} No backup exported from this device yet.`;
   }
   function exportJSON(){
-    const payload={app:"Little Garden Expense Tracker",schemaVersion:1,appVersion:META.version,currency:"PHP",exportedAt:new Date().toISOString(),categories:categoryNames,expenses,savedViews:customViews};
+    const payload={app:"Little Garden Expense Tracker",schemaVersion:1,appVersion:META.version,currency:"PHP",exportedAt:new Date().toISOString(),categories:categoryNames,expenses,...snapshotExtras()};
     downloadFile(`little-garden-expenses-${localDate()}.json`,JSON.stringify(payload,null,2),"application/json;charset=utf-8");
     lsSet(KEYS.lastBackup,payload.exportedAt);renderBackupMeta();
   }
   function csvCell(value){const s=String(value??"");return /[",\r\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;}
   function exportCSV(){
-    const rows=[["id","date","item","price","category","notes","createdAt","updatedAt"],...expenses.map(e=>[e.id,e.date,e.item,e.price.toFixed(2),e.category,e.notes,e.createdAt,e.updatedAt])];
+    const rows=[["id","date","item","price","category","method","notes","createdAt","updatedAt"],...expenses.map(e=>[e.id,e.date,e.item,e.price.toFixed(2),e.category,e.method,e.notes,e.createdAt,e.updatedAt])];
     downloadFile(`little-garden-expenses-${localDate()}.csv`,"\uFEFF"+rows.map(r=>r.map(csvCell).join(",")).join("\r\n"),"text/csv;charset=utf-8");
   }
   function parseCSV(text){
@@ -670,21 +698,21 @@
     const file=event.target.files?.[0];if(!file)return;const message=$("importMessage");message.textContent="";
     try{
       if(file.size>15*1024*1024)throw new Error("File is larger than 15 MB. Please use a smaller backup.");
-      const text=await file.text();let imported,importedViews=null;
+      const text=await file.text();let imported,extras=null;
       if(file.name.toLowerCase().endsWith(".csv")||file.type==="text/csv")imported=parseCSV(text);
       else{
         let parsed;try{parsed=JSON.parse(text);}catch(e){throw new Error("This file is not a Little Garden JSON backup or a CSV.");}
         const list=Array.isArray(parsed)?parsed:parsed?.expenses;
         if(!Array.isArray(list))throw new Error("JSON backup should contain an expenses array.");
         imported=list.map((e,i)=>normalizeExpense(e,i));
-        if(parsed&&Array.isArray(parsed.savedViews))importedViews=cleanViews(parsed.savedViews);
+        if(parsed&&!Array.isArray(parsed))extras=parsed;
       }
       const merge=$("importMode").value==="merge";
       if(!merge&&expenses.length&&!confirm(`Replace all ${expenses.length} ${expenses.length===1?"record":"records"} on this device with the ${imported.length} in this file? You can undo this afterwards with “Undo last import”.`)){message.textContent="Import cancelled. Nothing was changed.";message.style.color="";return;}
       const unique=new Map();
       if(merge)expenses.forEach(e=>unique.set(e.id,e));
       // Rows that came without an ID (a spreadsheet CSV) are matched on their content, so importing the same file twice does not double the records.
-      const sameAs=e=>[e.date,e.item,e.price.toFixed(2),e.category,e.notes].join("\u0001");
+      const sameAs=e=>[e.date,e.item,e.price.toFixed(2),e.category,e.notes].join("\u0001");   // method is left out on purpose: old CSVs have none
       const known=new Set([...unique.values()].map(sameAs));
       let added=0,updated=0,skipped=0;
       imported.forEach(e=>{
@@ -695,15 +723,11 @@
       });
       const result=[...unique.values()];
       if(result.length>100000)throw new Error("Import would exceed 100,000 records.");
-      const previous=expenses,previousViews=customViews;
-      const snapshotSaved=lsSet(KEYS.importUndo,JSON.stringify({saved:new Date().toISOString(),expenses:previous,savedViews:previousViews}));
+      const previous=expenses;
+      const snapshotSaved=lsSet(KEYS.importUndo,JSON.stringify({saved:new Date().toISOString(),expenses:previous,...snapshotExtras()}));
       expenses=result;
       if(!saveExpenses()){expenses=previous;return;}
-      if(importedViews){
-        const names=new Set(importedViews.map(v=>v.name.toLocaleLowerCase()));
-        customViews=(merge?[...customViews.filter(v=>!names.has(v.name.toLocaleLowerCase())),...importedViews]:importedViews).slice(-12);
-        lsSet(KEYS.views,JSON.stringify(customViews));
-      }
+      if(extras)applyImportedExtras(extras,merge);
       renderAll();
       const parts=[`${added} added`];if(updated)parts.push(`${updated} updated`);if(skipped)parts.push(`${skipped} already here`);
       message.textContent=merge?`Import finished: ${parts.join(", ")}.`:`Replaced your records with ${result.length} from the file.`;
@@ -721,9 +745,203 @@
     const previous=expenses;
     try{expenses=snap.expenses.map((e,i)=>normalizeExpense(e,i));}catch(e){expenses=previous;message.textContent="The undo copy could not be read.";message.style.color="#a84943";return;}
     if(!saveExpenses()){expenses=previous;return;}
-    customViews=cleanViews(snap.savedViews);lsSet(KEYS.views,JSON.stringify(customViews));
+    customViews=cleanViews(snap.savedViews);
+    if("budgets" in snap)budgets=cleanBudgets(snap.budgets);
+    if("recurring" in snap)recurring=cleanRecurring(snap.recurring);
+    if("income" in snap)income=cleanIncome(snap.income);
+    saveExtras();
     lsDel(KEYS.importUndo);renderAll();renderUndoImport();
     message.textContent="Import undone. Your earlier records are back.";message.style.color="var(--deep)";
+  }
+
+
+  /* =====================================================================================
+     Version 2.1: budget, recurring expenses, income, description suggestions, backup reminder.
+     Each lives under its own storage key and travels in the JSON backup.
+     ===================================================================================== */
+  function readJSON(key){ try { return JSON.parse(lsGet(key)); } catch(e) { return null; } }
+  function cleanAmount(value){ const n=Math.round(Number(value)*100)/100; return Number.isFinite(n)&&n>0&&n<=999999999 ? n : 0; }
+  function cleanBudgets(v){
+    const out={overall:0,categories:{}};
+    if(!v||typeof v!=="object")return out;
+    out.overall=cleanAmount(v.overall);
+    if(v.categories&&typeof v.categories==="object")categoryNames.forEach(name=>{const n=cleanAmount(v.categories[name]);if(n)out.categories[name]=n;});
+    return out;
+  }
+  function cleanRecurring(v){
+    if(!Array.isArray(v))return [];
+    const seen=new Set();
+    return v.map(r=>{
+      if(!r||typeof r!=="object")return null;
+      const item=String(r.item||"").trim().slice(0,120),price=cleanAmount(r.price),day=Math.round(Number(r.day));
+      if(!item||!price||!categoryNames.includes(r.category)||!(day>=1&&day<=31))return null;
+      let id=String(r.id||makeId()).slice(0,80);if(seen.has(id))id=makeId();seen.add(id);
+      return {id,item,price,category:r.category,method:cleanMethod(r.method),day,doneMonth:/^\d{4}-\d{2}$/.test(r.doneMonth)?r.doneMonth:""};
+    }).filter(Boolean).slice(0,100);
+  }
+  function cleanIncome(v){
+    if(!Array.isArray(v))return [];
+    const seen=new Set();
+    return v.map(r=>{
+      if(!r||typeof r!=="object")return null;
+      const source=String(r.source||"").trim().slice(0,120),amount=cleanAmount(r.amount);
+      if(!source||!amount||!validDate(r.date))return null;
+      let id=String(r.id||makeId()).slice(0,80);if(seen.has(id))id=makeId();seen.add(id);
+      return {id,date:r.date,source,amount};
+    }).filter(Boolean).slice(0,20000);
+  }
+  const snapshotExtras = () => ({savedViews:customViews,budgets,recurring,income});
+  function saveExtras(){
+    return [lsSet(KEYS.views,JSON.stringify(customViews)),lsSet(KEYS.budgets,JSON.stringify(budgets)),lsSet(KEYS.recurring,JSON.stringify(recurring)),lsSet(KEYS.income,JSON.stringify(income))].every(Boolean);
+  }
+  // A backup made before version 2.1 has no budget, recurring or income section: whatever is missing from the file is left as it is.
+  function applyImportedExtras(file,merge){
+    const byId=(mine,theirs)=>{const map=new Map();if(merge)mine.forEach(x=>map.set(x.id,x));theirs.forEach(x=>map.set(x.id,x));return [...map.values()];};
+    if(Array.isArray(file.savedViews)){
+      const views=cleanViews(file.savedViews),names=new Set(views.map(v=>v.name.toLocaleLowerCase()));
+      customViews=(merge?[...customViews.filter(v=>!names.has(v.name.toLocaleLowerCase())),...views]:views).slice(-12);
+    }
+    if(file.budgets&&typeof file.budgets==="object"){
+      const theirs=cleanBudgets(file.budgets);
+      budgets=merge?{overall:budgets.overall||theirs.overall,categories:{...theirs.categories,...budgets.categories}}:theirs;   // on merge, limits already set here win
+    }
+    if(Array.isArray(file.recurring))recurring=cleanRecurring(byId(recurring,cleanRecurring(file.recurring)));
+    if(Array.isArray(file.income))income=cleanIncome(byId(income,cleanIncome(file.income)));
+    saveExtras();
+  }
+
+  /* ----- Description suggestions: past descriptions, newest first; picking one fills the category and payment method ----- */
+  function renderSuggestions(){
+    itemLookup=new Map();
+    [...expenses].sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt)).forEach(e=>{
+      const key=e.item.toLocaleLowerCase();
+      if(!itemLookup.has(key))itemLookup.set(key,{item:e.item,category:e.category,method:e.method});
+    });
+    const list=$("itemSuggestions");list.innerHTML="";
+    [...itemLookup.values()].slice(0,150).forEach(x=>{const o=document.createElement("option");o.value=x.item;list.appendChild(o);});
+  }
+  function applySuggestion(){
+    if($("expenseId").value)return;   // never change the category of an expense being edited
+    const hit=itemLookup.get($("expenseItem").value.trim().toLocaleLowerCase());
+    if(!hit)return;
+    if(!categoryTouched)$("expenseCategory").value=hit.category;
+    if(!methodTouched&&hit.method)$("expenseMethod").value=hit.method;
+  }
+
+  /* ----- Budget ----- */
+  function budgetBar(label,spent,limit){
+    const ratio=limit?spent/limit:0,state=ratio>1?"over":ratio>=.8?"near":"ok",left=Math.round((limit-spent)*100)/100;
+    return `<div class="budget-row budget-${state}"><div class="budget-row-head"><span class="budget-row-label">${label}</span><span class="budget-row-figures">${money(spent)} of ${money(limit)}</span></div><div class="budget-track" role="img" aria-label="${Math.round(ratio*100)} percent of the limit used"><i style="width:${Math.min(100,ratio*100).toFixed(1)}%"></i></div><span class="budget-row-note">${left>=0?`${money(left)} left`:`${money(-left)} over`}</span></div>`;
+  }
+  function renderBudgetHome(){
+    const month=currentMonth(),rows=expenses.filter(e=>e.date.startsWith(month)),spent=sum(rows);
+    const earned=Math.round(income.filter(r=>r.date.startsWith(month)).reduce((n,r)=>n+Math.round(r.amount*100),0))/100;
+    let html="";
+    if(budgets.overall)html+=budgetBar("<strong>Total</strong>",spent,budgets.overall);
+    categories.forEach(c=>{const limit=budgets.categories[c.name];if(limit)html+=budgetBar(`${c.icon} ${escapeHTML(c.name)}`,sum(rows.filter(e=>e.category===c.name)),limit);});
+    if(earned){const left=Math.round((earned-spent)*100)/100;html+=`<p class="budget-income">Income this month ${money(earned)} · <strong class="${left<0?"change-up":"change-down"}">${left>=0?`${money(left)} left after spending`:`${money(-left)} more spent than received`}</strong></p>`;}
+    if(!html)html='<p class="chart-subtitle">No budget yet. Set a monthly total or a limit for any category, and your progress shows here.</p>';
+    $("budgetHome").innerHTML=html;
+  }
+  function fillBudgetForm(force){
+    if(!force&&$("budgetForm").contains(document.activeElement))return;   // do not overwrite what she is typing
+    $("budgetOverall").value=budgets.overall||"";
+    categories.forEach((c,i)=>{$(`budgetCat${i}`).value=budgets.categories[c.name]||"";});
+  }
+  function saveBudgetForm(event){
+    event.preventDefault();
+    const next={overall:$("budgetOverall").value,categories:{}};
+    categories.forEach((c,i)=>{next.categories[c.name]=$(`budgetCat${i}`).value;});
+    budgets=cleanBudgets(next);
+    const saved=lsSet(KEYS.budgets,JSON.stringify(budgets));
+    fillBudgetForm(true);renderBudgetHome();
+    const count=Object.keys(budgets.categories).length+(budgets.overall?1:0);
+    $("budgetMessage").textContent=!saved?"Could not save the budget in browser storage.":count?`Budget saved: ${count} ${count===1?"limit":"limits"}.`:"No limits set.";
+  }
+
+  /* ----- Recurring expenses ----- */
+  function dueDate(r,month){const [y,m]=month.split("-").map(Number);return `${month}-${String(Math.min(r.day,new Date(y,m,0).getDate())).padStart(2,"0")}`;}
+  const shortDate = date => new Date(date+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"numeric"});
+  function saveRecurring(){return lsSet(KEYS.recurring,JSON.stringify(recurring));}
+  function renderDue(){
+    const month=currentMonth(),due=recurring.filter(r=>r.doneMonth!==month).sort((a,b)=>a.day-b.day),list=$("dueList");
+    $("duePanel").classList.toggle("hidden",!due.length);list.innerHTML="";
+    due.forEach(r=>{
+      const c=getCategory(r.category),row=document.createElement("div");row.className="recent-transaction due-row";
+      row.innerHTML=`<span class="recent-category-icon" aria-hidden="true">${c.icon}</span><span class="recent-main"><strong>${escapeHTML(r.item)}</strong><small>${escapeHTML(shortDate(dueDate(r,month)))} · ${escapeHTML(r.category)}${r.method?" · "+escapeHTML(r.method):""}</small></span><strong class="recent-amount">${money(r.price)}</strong><span class="due-actions"><button class="button button-primary" type="button" data-due-add aria-label="Add ${escapeHTML(r.item)} for this month">Add</button><button class="button button-quiet" type="button" data-due-skip aria-label="Skip ${escapeHTML(r.item)} this month">Skip</button></span>`;
+      row.querySelector("[data-due-add]").addEventListener("click",()=>addRecurringNow(r.id));
+      row.querySelector("[data-due-skip]").addEventListener("click",()=>{r.doneMonth=month;saveRecurring();renderDue();renderRecurringList();});
+      list.appendChild(row);
+    });
+  }
+  function addRecurringNow(id){
+    const r=recurring.find(x=>x.id===id),month=currentMonth();if(!r||r.doneMonth===month)return;
+    let entry;try{entry=normalizeExpense({date:dueDate(r,month),item:r.item,price:r.price,category:r.category,method:r.method});}catch(e){return;}
+    const previous=expenses;expenses=[...expenses,entry];
+    if(!saveExpenses()){expenses=previous;return;}
+    r.doneMonth=month;saveRecurring();renderAll();
+    $("formMessage").textContent=`Added “${r.item}” for ${shortDate(entry.date)}.`;
+  }
+  function addRecurring(event){
+    event.preventDefault();
+    const list=cleanRecurring([{item:$("recurringItem").value,price:$("recurringPrice").value,category:$("recurringCategory").value,method:$("recurringMethod").value,day:$("recurringDay").value}]);
+    if(!list.length){$("recurringMessage").textContent="Check the description, the price and the day (1 to 31).";return;}
+    recurring=[...recurring,list[0]].slice(-100);
+    if(!saveRecurring()){$("recurringMessage").textContent="Could not save in browser storage.";return;}
+    $("recurringForm").reset();$("recurringDay").value="1";
+    renderDue();renderRecurringList();$("recurringMessage").textContent=`“${list[0].item}” will wait on Home each month.`;
+  }
+  function renderRecurringList(){
+    const list=$("recurringList"),month=currentMonth();list.innerHTML="";
+    [...recurring].sort((a,b)=>a.day-b.day).forEach(r=>{
+      const c=getCategory(r.category),row=document.createElement("div");row.className="recent-transaction due-row";
+      row.innerHTML=`<span class="recent-category-icon" aria-hidden="true">${c.icon}</span><span class="recent-main"><strong>${escapeHTML(r.item)}</strong><small>Day ${r.day} · ${escapeHTML(r.category)}${r.method?" · "+escapeHTML(r.method):""}${r.doneMonth===month?" · done for this month":""}</small></span><strong class="recent-amount">${money(r.price)}</strong><span class="due-actions"><button class="icon-button" type="button" aria-label="Remove the recurring expense ${escapeHTML(r.item)}">×</button></span>`;
+      row.querySelector("button").addEventListener("click",()=>{
+        if(!confirm(`Remove the recurring expense “${r.item}”? Expenses already recorded stay.`))return;
+        recurring=recurring.filter(x=>x.id!==r.id);saveRecurring();renderDue();renderRecurringList();
+      });
+      list.appendChild(row);
+    });
+  }
+
+  /* ----- Income ----- */
+  function addIncome(event){
+    event.preventDefault();
+    const list=cleanIncome([{date:$("incomeDate").value,source:$("incomeSource").value,amount:$("incomeAmount").value}]);
+    if(!list.length){$("incomeMessage").textContent="Check the date, the source and the amount.";return;}
+    const previous=income;income=[...income,list[0]];
+    if(!lsSet(KEYS.income,JSON.stringify(income))){income=previous;$("incomeMessage").textContent="Could not save in browser storage.";return;}
+    $("incomeForm").reset();$("incomeDate").value=localDate();
+    renderIncomeList();renderBudgetHome();$("incomeMessage").textContent="Income added.";
+  }
+  function renderIncomeList(){
+    const list=$("incomeList"),month=currentMonth();list.innerHTML="";
+    const total=Math.round(income.filter(r=>r.date.startsWith(month)).reduce((n,r)=>n+Math.round(r.amount*100),0))/100;
+    $("incomeMonthTotal").textContent=`${money(total)} this month`;
+    [...income].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,60).forEach(r=>{
+      const row=document.createElement("div");row.className="recent-transaction due-row";
+      row.innerHTML=`<span class="recent-category-icon" aria-hidden="true">🌻</span><span class="recent-main"><strong>${escapeHTML(r.source)}</strong><small>${escapeHTML(longDate(r.date))}</small></span><strong class="recent-amount">${money(r.amount)}</strong><span class="due-actions"><button class="icon-button" type="button" aria-label="Remove the income ${escapeHTML(r.source)}">×</button></span>`;
+      row.querySelector("button").addEventListener("click",()=>{
+        if(!confirm(`Remove “${r.source}”, ${money(r.amount)}?`))return;
+        income=income.filter(x=>x.id!==r.id);lsSet(KEYS.income,JSON.stringify(income));renderIncomeList();renderBudgetHome();
+      });
+      list.appendChild(row);
+    });
+  }
+
+  /* ----- Backup reminder on Home: after 30 days without an export, with a week's snooze ----- */
+  function renderHomeNotices(){
+    const host=$("homeNotices");host.innerHTML="";
+    if(expenses.length<10)return;
+    const day=86400000,last=Date.parse(isoStamp(lsGet(KEYS.lastBackup)||"")),snooze=Date.parse(isoStamp(lsGet(KEYS.backupSnooze)||""));
+    const age=Number.isNaN(last)?null:Math.floor((Date.now()-last)/day);
+    if(age!==null&&age<30)return;
+    if(!Number.isNaN(snooze)&&Date.now()-snooze<7*day)return;
+    const box=document.createElement("div");box.className="notice";box.setAttribute("role","status");
+    box.innerHTML=`<span class="notice-text"><strong>Time for a backup.</strong> ${age===null?`You have ${expenses.length} expenses and no backup from this device yet.`:`Your last backup was ${age} days ago.`}</span><span class="notice-actions"><button class="button button-primary" type="button" data-notice-export>Export backup</button><button class="button button-quiet" type="button" data-notice-later>Later</button></span>`;
+    box.querySelector("[data-notice-export]").addEventListener("click",()=>{exportJSON();renderHomeNotices();});
+    box.querySelector("[data-notice-later]").addEventListener("click",()=>{lsSet(KEYS.backupSnooze,new Date().toISOString());renderHomeNotices();});
+    host.appendChild(box);
   }
 
   /* =====================================================================================
@@ -737,6 +955,7 @@
     transactions:{title:"Transactions",label:"Transactions",icon:"list",group:"Your spending"},
     insights:{title:"Insights",label:"Insights",icon:"pie",group:"Your spending"},
     calendar:{title:"Calendar",label:"Calendar",icon:"calendar",group:"Your spending"},
+    budget:{title:"Budget and income",label:"Budget and income",icon:"wallet",group:"Your spending"},
     tools:{title:"Tools and backup",label:"Tools and backup",icon:"tools",group:"Your data"},
     "whats-new":{title:"What’s new",label:"What’s new",icon:"news",group:"App",badge:"news"},
     about:{title:"About",label:"About",icon:"info",group:"App"}
@@ -748,6 +967,7 @@
     pie:'<path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',
     calendar:'<rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/>',
     tools:'<path d="M12 3v11m0 0l-4-4m4 4l4-4M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/>',
+    wallet:'<path d="M4 7a2 2 0 0 1 2-2h11v3M4 7v10a2 2 0 0 0 2 2h13a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1H6a2 2 0 0 1-2-1zM16.5 13.5h.01"/>',
     news:'<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h6M9 16h6"/>',
     info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
     external:'<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'
@@ -954,6 +1174,8 @@
         <li>Search from the top bar on any screen. It looks through descriptions, notes, categories, dates and amounts.</li>
         <li>On Insights, tap a chart slice, a top expense or a heatmap square to open the matching entries.</li>
         <li>On Calendar, tap a day to see it, then add an expense for that day.</li>
+        <li>Set a monthly budget, recurring expenses and income in <a href="#/budget">Budget and income</a>. Home then shows how the month is going.</li>
+        <li>Start typing a description you have used before and pick it from the list. The category fills in for you.</li>
         <li>To install on iPhone or iPad, open this page in Safari, tap Share, then Add to Home Screen.</li>
       </ul>
       <p class="about-text about-credit">App created by Isabella Navarro, MD. Latest version November 2026. <a href="mailto:isaymotion@gmail.com">isaymotion@gmail.com</a></p>
@@ -969,6 +1191,7 @@
     scrollKey=name;fromHistory=false;
     if(name==="whats-new")renderNews();
     if(name==="about")renderAbout();
+    if(name==="budget")fillBudgetForm(true);
     document.querySelectorAll(".page-view").forEach(view=>{const on=view.dataset.view===name;view.hidden=!on;view.classList.toggle("is-active",on);});
     const title=name==="missing"?"Page not found":ROUTES[name].title;
     document.title=title?`${title} — Little Garden`:"Little Garden — Expense Tracker";

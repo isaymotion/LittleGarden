@@ -5,6 +5,21 @@
    and "Latest version" in the footer of index.html. */
 window.APP_CHANGELOG = [
   {
+    version: '2.1.0',
+    date: '2026-11-16',
+    title: 'Budget, recurring expenses, income, and easier entry',
+    items: [
+      { type: 'feature', text: 'Monthly budget: set a total, a limit for any category, or both. Home shows a progress bar for each, turning amber near the limit and red once you pass it.', href: '#/budget' },
+      { type: 'feature', text: 'Recurring expenses such as rent, internet and subscriptions. Each month they wait on Home until you tap Add or Skip.', href: '#/budget' },
+      { type: 'feature', text: 'Income, if you want it: record what you receive and Home shows what is left after spending.', href: '#/budget' },
+      { type: 'feature', text: 'Paid with: mark an expense as Cash, GCash, Card, Bank transfer or Other. Insights has a new chart by payment method, and search finds it too.' },
+      { type: 'feature', text: 'Description suggestions: start typing something you have entered before, pick it, and the category and payment method fill in.' },
+      { type: 'feature', text: 'A backup reminder on Home when your last backup is more than 30 days old. Tap Later to hide it for a week.' },
+      { type: 'update', text: 'On phones, Transactions are now cards, so there is no more sideways scrolling.', href: '#/transactions' },
+      { type: 'update', text: 'Backups now carry your budget, recurring expenses and income along with your expenses and saved views. Older backups still restore.' }
+    ]
+  },
+  {
     version: '2.0.0',
     date: '2026-11-16',
     title: 'New menu, a What’s new page, and a round of fixes',

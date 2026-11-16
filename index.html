@@ -68,7 +68,7 @@
 <noscript><p>Little Garden needs JavaScript turned on to run.</p></noscript>
 <div class="page-view" data-view="home" id="homeView" hidden=""><section aria-label="Welcome to Little Garden Expense Tracker" class="welcome panel">
 <img alt="Welcome to Little Garden Expense Tracker, illustrated with a flower garden and church in pixel art" class="welcome-banner" src="welcome-banner.jpg"/>
-</section><section aria-labelledby="entryTitle" class="panel entry-panel">
+</section><div class="home-notices" id="homeNotices"></div><section aria-labelledby="entryTitle" class="panel entry-panel">
 <div class="section-heading">
 <div><p class="eyebrow">ADD TO YOUR JOURNAL</p><h2 id="entryTitle">New expense</h2></div>
 <span aria-hidden="true" class="leaf-badge">✦</span>
@@ -78,7 +78,8 @@
 <label for="expenseDate">Date</label>
 <input id="expenseDate" name="date" required="" type="date"/>
 <label for="expenseItem">Item or description</label>
-<input id="expenseItem" maxlength="120" name="item" placeholder="e.g. Weekend groceries" required="" type="text"/>
+<input autocomplete="off" id="expenseItem" list="itemSuggestions" maxlength="120" name="item" placeholder="e.g. Weekend groceries" required="" type="text"/>
+<datalist id="itemSuggestions"></datalist>
 <div class="field-row">
 <div class="field-grow">
 <label for="expensePrice">Price (PHP)</label>
@@ -88,8 +89,12 @@
 <label for="expenseCategory">Category</label>
 <select id="expenseCategory" name="category" required=""></select>
 </div>
+<div class="field-grow field-method">
+<label for="expenseMethod">Paid with <span class="optional">(optional)</span></label>
+<select id="expenseMethod" name="method"></select>
 </div>
-<details class="optional-fields" id="optionalFields"><summary>Optional details <span class="optional">— add notes</span></summary><label for="expenseNotes">Notes <span class="optional">(optional)</span></label><textarea id="expenseNotes" maxlength="500" name="notes" placeholder="A little context, if useful…" rows="2"></textarea></details>
+</div>
+<details class="optional-fields" id="optionalFields"><summary>Notes <span class="optional">(optional)</span></summary><label for="expenseNotes">Notes <span class="optional">(optional)</span></label><textarea id="expenseNotes" maxlength="500" name="notes" placeholder="A little context, if useful…" rows="2"></textarea></details>
 <div class="form-actions">
 <button class="button button-primary" id="saveExpenseBtn" type="submit">Add expense</button>
 <button class="button button-quiet hidden" id="cancelEditBtn" type="button">Cancel edit</button>
@@ -112,6 +117,12 @@
 <strong class="summary-value" id="dailyAverage">₱0.00</strong>
 <span class="summary-note">Based on days so far this month</span>
 </article>
+</section><section aria-labelledby="budgetHomeTitle" class="panel budget-panel">
+<div class="section-heading"><div><p class="eyebrow">ROOM TO GROW</p><h2 id="budgetHomeTitle">Budget this month</h2></div><a class="button button-outline" href="#/budget">Budget and income</a></div>
+<div id="budgetHome"></div>
+</section><section aria-labelledby="dueTitle" class="panel due-panel hidden" id="duePanel">
+<div class="section-heading"><div><p class="eyebrow">REGULAR WATERING</p><h2 id="dueTitle">Recurring this month</h2><p class="chart-subtitle">Tap Add when you have paid one. It is recorded on its usual day.</p></div></div>
+<div class="recent-transaction-list" id="dueList"></div>
 </section><section aria-labelledby="recentTitle" class="panel recent-panel">
 <div class="section-heading"><div><p class="eyebrow">JUST ADDED TO YOUR GARDEN</p><h2 id="recentTitle">Recent transactions</h2><p class="chart-subtitle">A quick look at your latest entries.</p></div><button class="button button-outline" id="viewAllTransactionsBtn" type="button">View all</button></div>
 <div class="recent-transaction-list" id="recentTransactions"><div class="recent-empty">Your recent expenses will appear here.</div></div>
@@ -131,7 +142,7 @@
 <div class="chart-grid">
 <article class="chart-card">
 <h3>By category</h3>
-<p class="chart-subtitle">All 12 categories</p>
+<p class="chart-subtitle">The 12 categories</p>
 <div aria-label="Pie chart of spending by category" class="chart-wrap" id="categoryChart" role="img"></div>
 <div class="legend" id="categoryLegend"></div>
 </article>
@@ -140,6 +151,12 @@
 <p class="chart-subtitle">Four broader areas</p>
 <div aria-label="Pie chart of spending by broader area" class="chart-wrap" id="areaChart" role="img"></div>
 <div class="legend" id="areaLegend"></div>
+</article>
+<article class="chart-card">
+<h3>By payment method</h3>
+<p class="chart-subtitle">How you paid</p>
+<div aria-label="Pie chart of spending by payment method" class="chart-wrap" id="methodChart" role="img"></div>
+<div class="legend" id="methodLegend"></div>
 </article>
 </div>
 <article class="chart-card bar-card">
@@ -262,7 +279,40 @@
 <div class="tool-item"><span class="tool-icon">♡</span><div><h3>Private by design</h3><p>Your entries stay in this browser using local storage. No account or server is required. Export backups regularly, especially before clearing browser data.</p></div></div>
 <div class="tool-item"><span class="tool-icon">☼</span><div><h3>Daily rhythm</h3><p>Use the date field to log expenses as you go. Your daily chart and monthly summary update automatically.</p></div></div>
 </div>
-</section></div><div class="page-view" data-view="whats-new" hidden="" id="newsView"></div>
+</section></div><div class="page-view" data-view="budget" hidden="" id="budgetView"><section aria-labelledby="budgetTitle" class="panel">
+<div class="section-heading"><div><p class="eyebrow">ROOM TO GROW</p><h2 id="budgetTitle">Monthly budget</h2><p class="chart-subtitle">Set a total, a limit for any category, or both. Leave a box empty for no limit. Home shows how the month is going.</p></div><span aria-hidden="true" class="leaf-badge">❦</span></div>
+<form id="budgetForm">
+<div class="budget-grid">
+<div class="budget-field budget-field-total"><label for="budgetOverall">Total for the month</label><div class="price-input"><span>₱</span><input id="budgetOverall" inputmode="decimal" max="999999999" min="0" placeholder="No limit" step="0.01" type="number"/></div></div>
+<div class="budget-fields" id="budgetCategoryFields"></div>
+</div>
+<div class="form-actions"><button class="button button-primary" type="submit">Save budget</button><button class="button button-quiet" id="clearBudgetBtn" type="button">Clear all limits</button></div>
+<p aria-live="polite" class="form-message" id="budgetMessage" role="status"></p>
+</form>
+</section><section aria-labelledby="recurringTitle" class="panel">
+<div class="section-heading"><div><p class="eyebrow">REGULAR WATERING</p><h2 id="recurringTitle">Recurring expenses</h2><p class="chart-subtitle">Rent, internet, subscriptions. Each month they wait on Home until you tap Add.</p></div></div>
+<form class="mini-form" id="recurringForm">
+<div class="mini-field mini-wide"><label for="recurringItem">Item or description</label><input id="recurringItem" maxlength="120" placeholder="e.g. Internet" required="" type="text"/></div>
+<div class="mini-field"><label for="recurringPrice">Price (PHP)</label><div class="price-input"><span>₱</span><input id="recurringPrice" inputmode="decimal" max="999999999" min="0.01" placeholder="0.00" required="" step="0.01" type="number"/></div></div>
+<div class="mini-field"><label for="recurringDay">Day of the month</label><input id="recurringDay" inputmode="numeric" max="31" min="1" required="" step="1" type="number" value="1"/></div>
+<div class="mini-field"><label for="recurringCategory">Category</label><select id="recurringCategory" required=""></select></div>
+<div class="mini-field"><label for="recurringMethod">Paid with</label><select id="recurringMethod"></select></div>
+<div class="form-actions mini-wide"><button class="button button-primary" type="submit">Add recurring expense</button></div>
+<p aria-live="polite" class="form-message mini-wide" id="recurringMessage" role="status"></p>
+</form>
+<div class="recent-transaction-list" id="recurringList"></div>
+</section><section aria-labelledby="incomeTitle" class="panel">
+<div class="section-heading"><div><p class="eyebrow">WHAT COMES IN</p><h2 id="incomeTitle">Income</h2><p class="chart-subtitle">Optional. Record what you receive to see what is left after spending.</p></div><span class="count-pill" id="incomeMonthTotal">₱0.00 this month</span></div>
+<form class="mini-form" id="incomeForm">
+<div class="mini-field"><label for="incomeDate">Date</label><input id="incomeDate" required="" type="date"/></div>
+<div class="mini-field"><label for="incomeAmount">Amount (PHP)</label><div class="price-input"><span>₱</span><input id="incomeAmount" inputmode="decimal" max="999999999" min="0.01" placeholder="0.00" required="" step="0.01" type="number"/></div></div>
+<div class="mini-field mini-wide"><label for="incomeSource">Source</label><input id="incomeSource" maxlength="120" placeholder="e.g. Salary" required="" type="text"/></div>
+<div class="form-actions mini-wide"><button class="button button-primary" type="submit">Add income</button></div>
+<p aria-live="polite" class="form-message mini-wide" id="incomeMessage" role="status"></p>
+</form>
+<div class="recent-transaction-list" id="incomeList"></div>
+</section></div>
+<div class="page-view" data-view="whats-new" hidden="" id="newsView"></div>
 <div class="page-view" data-view="about" hidden="" id="aboutView"></div>
 <div class="page-view" data-view="missing" hidden="" id="missingView"><section class="panel"><div class="empty-state"><span aria-hidden="true">🍃</span><h3>That page is not here</h3><p>The link may be old. Everything else is one tap away.</p><p><a class="button button-primary" href="#/">Go to Home</a></p></div></section></div>
 </main>
@@ -274,7 +324,7 @@
 <div class="backup__head">
 <svg aria-hidden="true" class="backup__icon" viewBox="0 0 24 24"><path d="M12 3v11m0 0l-4-4m4 4l4-4M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
 <div><h2 class="backup__title" id="backup-title">Back up your data</h2>
-<p class="backup__text">Your expenses live only in this browser. Export a backup file to keep them safe, then restore it on another phone, tablet or computer from Tools and backup.</p></div>
+<p class="backup__text">Your expenses, budget, recurring items and income live only in this browser. Export a backup file to keep them safe, then restore it on another phone, tablet or computer from Tools and backup.</p></div>
 </div>
 <div class="backup__actions">
 <button class="btn backup__btn" id="exportJsonBtn" type="button">Export backup</button>
