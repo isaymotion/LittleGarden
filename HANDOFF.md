@@ -60,7 +60,7 @@ Examples:
 ## 5. Commands
 ```bash
 git clone --depth 1 https://github.com/isaymotion/littlegarden /home/claude/littlegarden
-git -C /home/claude/littlegarden fetch --depth=1 origin dev-tools
+git -C /home/claude/littlegarden fetch --depth=1 origin dev-tools:refs/remotes/origin/dev-tools   # the plain fetch leaves no origin/dev-tools ref in a shallow clone
 git -C /home/claude/littlegarden show origin/dev-tools:tools/browser_test.py > /home/claude/browser_test.py
 cd /home/claude/littlegarden && (python3 -m http.server 8765 >/dev/null 2>&1 &) && sleep 1
 python3 /home/claude/browser_test.py | grep -v '^PASS'    # passing = only "ERRORS []" (133 PASS lines)
@@ -77,10 +77,11 @@ Screenshots go to `/tmp/lg-shots` (phone-*.png, desktop-*.png). Look at them aft
 | Budget, recurring, income, payment method, suggestions, backup reminder, phone cards | Done (2.1.0) |
 | iPhone date-field overflow | Fixed (2.1.1); **not yet confirmed on her phone** |
 | Clothes and Books categories (Lifestyle & other) | Done (2.2.0) |
-| Browser test | 133 checks, all pass on 2.2.0 |
+| Browser test | 133 checks, all pass on 2.2.0 (re-run clean in a fresh clone, 2026-11-16) |
 
 ## 7. Next steps
-- Nothing is queued. First ask whether the date boxes now fit on her iPhone (2.1.1).
+- **Reported 2026-11-16 (new chat):** her iPhone still shows 2.1.0 although the live site serves 2.2.0. Likely cause: no update check in the app. `sw.js` is network-first but `fetch(req)` can be answered from Safari's HTTP cache (Pages sends max-age=600), and an installed iOS app resumes rather than reloads; app.js only calls `register()` (no `registration.update()`, no reload on `controllerchange`). Proposed 2.2.1, awaiting her go-ahead: `fetch(req,{cache:"no-cache"})` in sw.js, check for an update when the app becomes visible, and reload once when a new worker takes over. Until then: swipe the app closed and reopen, twice if needed.
+- Still to ask: whether the date boxes now fit on her iPhone (2.1.1). She can only judge once the phone shows 2.1.1 or later.
 - Open choice from 2.2.0: she may want Clothes moved to the "Health & care" area beside Shopping & Personal Care. It is a one-line `area:` change in `categories` in app.js, plus the README table.
 - Known limits she was told about, if she asks:
   - income is not in the PDF report or the yearly charts;
