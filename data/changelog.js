@@ -5,6 +5,14 @@
    and "Latest version" in the footer of index.html. */
 window.APP_CHANGELOG = [
   {
+    version: '2.1.1',
+    date: '2026-11-16',
+    title: 'Date boxes fit on iPhone',
+    items: [
+      { type: 'correction', text: 'Date and month boxes no longer spill past the edge of the card on iPhone and iPad.' }
+    ]
+  },
+  {
     version: '2.1.0',
     date: '2026-11-16',
     title: 'Budget, recurring expenses, income, and easier entry',

@@ -548,3 +548,10 @@ body{min-height:100vh;display:flex;flex-direction:column}
 .notice-text{flex:1 1 220px}
 .notice-actions{display:flex;gap:8px;flex-wrap:wrap}
 :root[data-theme="dark"] .notice{background:#33301f;border-color:#5a5330;color:#f0e4bd}
+
+/* iPhone/iPad Safari: date and month fields have a built-in minimum width and centred text,
+   so they spill out of narrow cards. Strip the native look and let them fill their box. */
+input[type="date"],input[type="month"]{-webkit-appearance:none;appearance:none;display:block;width:100%;max-width:100%;min-width:0;box-sizing:border-box;text-align:left}
+input[type="date"]::-webkit-date-and-time-value,input[type="month"]::-webkit-date-and-time-value{text-align:left;margin:0}
+input[type="date"]::-webkit-calendar-picker-indicator,input[type="month"]::-webkit-calendar-picker-indicator{margin-left:auto}
+.month-stepper .month-picker-label{min-width:0;flex:1 1 auto}
