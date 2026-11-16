@@ -20,8 +20,10 @@
     {name:"Pets", icon:"🐾", area:"Health & care", color:"#c59b75"},
     {name:"Transportation", icon:"🚲", area:"Property & transport", color:"#8099c5"},
     {name:"Shopping & Personal Care", icon:"🌷", area:"Health & care", color:"#df9fc0"},
+    {name:"Clothes", icon:"👗", area:"Lifestyle & other", color:"#c47fa5"},
     {name:"Hobbies & Entertainment", icon:"🎨", area:"Lifestyle & other", color:"#b7a2d3"},
     {name:"Education & Professional Development", icon:"📚", area:"Lifestyle & other", color:"#a6b9a0"},
+    {name:"Books", icon:"📖", area:"Lifestyle & other", color:"#b9a04a"},
     {name:"Gifts & Donations", icon:"🎁", area:"Lifestyle & other", color:"#e5a58e"},
     {name:"Miscellaneous", icon:"🍃", area:"Lifestyle & other", color:"#a9b0a2"}
   ];
@@ -74,7 +76,7 @@
     if (!validDate(date)) throw new Error(`Row ${index+1}: invalid or missing date.`);
     if (!item || item.length>120) throw new Error(`Row ${index+1}: item must be 1–120 characters.`);
     if (!Number.isFinite(price) || price<=0 || price>999999999) throw new Error(`Row ${index+1}: price must be greater than zero and within the supported limit.`);
-    if (!categoryNames.includes(category)) throw new Error(`Row ${index+1}: unknown category "${category}". Use one of the 12 fixed categories.`);
+    if (!categoryNames.includes(category)) throw new Error(`Row ${index+1}: unknown category "${category}". Use one of the 14 fixed categories.`);
     const notes = String(raw.notes ?? raw.Notes ?? "").trim();
     const now=new Date().toISOString(),created=isoStamp(raw.createdAt ?? raw.createdat)||now;
     return {id:String(raw.id || makeId()).slice(0,80),date,item,price:Math.round(price*100)/100,category,method:cleanMethod(raw.method ?? raw.Method ?? raw["paid with"]),notes:notes.slice(0,500),createdAt:created,updatedAt:isoStamp(raw.updatedAt ?? raw.updatedat)||created};
