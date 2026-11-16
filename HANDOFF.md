@@ -4,7 +4,7 @@
 - **What:** Little Garden, Dr. Isabella Navarro's personal monthly expense tracker in Philippine pesos (PHP). Private, offline, data only in the browser (localStorage). Originally built by ChatGPT; rebuilt and extended by Claude on 2026-11-16.
 - **Repo:** `isaymotion/LittleGarden` (GitHub; the clone URL is lowercase `littlegarden`). Live from `main` on GitHub Pages: https://isaymotion.github.io/LittleGarden/
 - **Branches:** `main` = the site. `dev-tools` = this doc plus `tools/` (never merged into main).
-- **Current version:** 2.3.0 (2026-11-16, PR #4 merged). Open PRs: none.
+- **Current version:** 2.3.1 (2026-11-16, PR #5 merged). Open PRs: none.
 
 ## 2. Fixed rules
 - Footer and About attribution, exact: `App created by Isabella Navarro, MD. Latest version November 2026. isaymotion@gmail.com` (email is a mailto link). Only the month ever changes.
@@ -13,7 +13,7 @@
 - **Storage keys never change** (`little-garden-expenses-v1` etc.). Changing them loses her data.
 - `sw.js` deletes only caches starting with `little-garden-` (all her apps share the isaymotion.github.io origin).
 - Every release bumps three things that must agree: newest entry in `data/changelog.js`, `version` in `data/app-meta.js`, `VERSION` in `sw.js`. The footer month stays "November 2026" until a release in a later month.
-- Pay me account list (`PAY_ACCOUNTS` in app.js) is fixed: GCash, Maya (PayMaya), MariBank, BPI, Maya Bank, UnionBank, Security Bank, Metrobank. Ids are storage keys, never rename them. Badges are coloured initials only (no bank logos).
+- Pay me account list (`PAY_ACCOUNTS` in app.js) is fixed: e-wallets GCash, Maya (PayMaya); banks in alphabetical order BDO, BPI, GoTyme, MariBank, Maya Bank, Metrobank, Security Bank, UnionBank (GoTyme and BDO added in 2.3.1). Ids are storage keys, never rename them. Badges are coloured letters from each entry's `short` field (no bank logos); 3-letter badges get `.pay-badge--3`. To add a bank: one line in `PAY_ACCOUNTS` with a unique id and `short`, then update the test's account counts (10 add rows, 9 after one save).
 - Category list: 14 fixed; **Miscellaneous must stay last** (`getCategory` falls back to the last entry).
 - Her preference: use subagents for simple tasks to save tokens; Claude keeps design and final review.
 - She tests on iPhone (Safari, installed to the home screen, usually dark mode).
@@ -79,13 +79,13 @@ Screenshots go to `/tmp/lg-shots` (phone-*.png, desktop-*.png). Look at them aft
 | Budget, recurring, income, payment method, suggestions, backup reminder, phone cards | Done (2.1.0) |
 | iPhone date-field overflow | Fixed (2.1.1); **not yet confirmed on her phone** |
 | Clothes and Books categories (Lifestyle & other) | Done (2.2.0) |
-| Pay me (QR codes, viewer, Home row, backup) | Done (2.3.0); **not yet tried on her iPhone** |
+| Pay me (QR codes, viewer, Home row, backup) | Done (2.3.0); GoTyme and BDO added (2.3.1); **not yet tried on her iPhone** |
 | Automatic updates (stale 2.1.0 on her phone) | Fixed (2.3.0); verified in Chromium with service workers on; **not yet confirmed on her iPhone** |
-| Browser test | 169 checks, all pass on 2.3.0 |
+| Browser test | 169 checks, all pass on 2.3.1 |
 
 ## 7. Next steps
 - First ask: (1) after closing and reopening the app, does About show 2.3.0? Once she is on 2.3.0 later updates arrive by themselves. (2) Do the date boxes fit (2.1.1)? (3) Did a Pay me QR upload, show and share work on her iPhone?
-- Pay me ideas not built (offer only if she asks): extra accounts beyond the 8 (e.g. other banks), reordering, auto-cropping the QR from a full screenshot, raising screen brightness (not possible from a web page).
+- Pay me ideas not built (offer only if she asks): more accounts (one line each, see section 2), reordering, auto-cropping the QR from a full screenshot, raising screen brightness (not possible from a web page).
 - Open choice from 2.2.0: she may want Clothes moved to the "Health & care" area beside Shopping & Personal Care. It is a one-line `area:` change in `categories` in app.js, plus the README table.
 - Known limits she was told about, if she asks:
   - income is not in the PDF report or the yearly charts;
