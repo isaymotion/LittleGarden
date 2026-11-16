@@ -5,6 +5,14 @@
    and "Latest version" in the footer of index.html. */
 window.APP_CHANGELOG = [
   {
+    version: '2.3.1',
+    date: '2026-11-16',
+    title: 'GoTyme and BDO in Pay me',
+    items: [
+      { type: 'update', text: 'Pay me now has GoTyme and BDO too. Banks are listed alphabetically, and each account has its own short letters on its badge.', href: '#/pay-me' }
+    ]
+  },
+  {
     version: '2.3.0',
     date: '2026-11-16',
     title: 'Pay me, and updates that arrive on their own',
