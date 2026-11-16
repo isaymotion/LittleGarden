@@ -953,15 +953,17 @@
      Details live in localStorage (KEYS.payMe). The pictures live in IndexedDB, because every
      isaymotion app shares one origin and its small (~5 MB) localStorage. Both travel in the JSON backup.
      ===================================================================================== */
-  const PAY_ACCOUNTS = [
-    {id:"gcash",name:"GCash",kind:"E-wallet",color:"#1f63d6",numberLabel:"GCash number"},
-    {id:"maya",name:"Maya (PayMaya)",kind:"E-wallet",color:"#0f9d6b",numberLabel:"Maya number"},
-    {id:"maribank",name:"MariBank",kind:"Bank",color:"#e8662a"},
-    {id:"bpi",name:"BPI",kind:"Bank",color:"#b3242a"},
-    {id:"mayabank",name:"Maya Bank",kind:"Bank",color:"#127a57"},
-    {id:"unionbank",name:"UnionBank",kind:"Bank",color:"#e07b00"},
-    {id:"securitybank",name:"Security Bank",kind:"Bank",color:"#1787c6"},
-    {id:"metrobank",name:"Metrobank",kind:"Bank",color:"#24408e"}
+  const PAY_ACCOUNTS = [   // ids are storage keys: never rename one. Banks in alphabetical order.
+    {id:"gcash",name:"GCash",short:"GC",kind:"E-wallet",color:"#1f63d6",numberLabel:"GCash number"},
+    {id:"maya",name:"Maya (PayMaya)",short:"MY",kind:"E-wallet",color:"#0f9d6b",numberLabel:"Maya number"},
+    {id:"bdo",name:"BDO",short:"BDO",kind:"Bank",color:"#1546a0"},
+    {id:"bpi",name:"BPI",short:"BPI",kind:"Bank",color:"#b3242a"},
+    {id:"gotyme",name:"GoTyme",short:"GT",kind:"Bank",color:"#0a9fb0"},
+    {id:"maribank",name:"MariBank",short:"MR",kind:"Bank",color:"#e8662a"},
+    {id:"mayabank",name:"Maya Bank",short:"MB",kind:"Bank",color:"#127a57"},
+    {id:"metrobank",name:"Metrobank",short:"MT",kind:"Bank",color:"#24408e"},
+    {id:"securitybank",name:"Security Bank",short:"SB",kind:"Bank",color:"#1787c6"},
+    {id:"unionbank",name:"UnionBank",short:"UB",kind:"Bank",color:"#e07b00"}
   ];
   const PAY_DB = "little-garden-pay-me", PAY_STORE = "qr";
   let payMeta = {};            // {gcash:{name,number,note,updatedAt}, ...}
@@ -972,8 +974,8 @@
   let payLoaded = Promise.resolve();
   const payAccount = id => PAY_ACCOUNTS.find(a=>a.id===id);
   const paySaved = id => !!(payQr[id] || (payMeta[id] && (payMeta[id].name || payMeta[id].number)));
-  const payInitials = a => a.name.replace(/\(.*?\)/g,"").split(/\s+/).filter(Boolean).map(w=>w[0]).join("").slice(0,2).toUpperCase();
-  const payBadge = (a,extra="") => `<span class="pay-badge${extra}" aria-hidden="true" style="--pay:${a.color}">${payInitials(a)}</span>`;
+  const payInitials = a => a.short || a.name.slice(0,2).toUpperCase();
+  const payBadge = (a,extra="") => `<span class="pay-badge${extra}${payInitials(a).length>2?" pay-badge--3":""}" aria-hidden="true" style="--pay:${a.color}">${payInitials(a)}</span>`;
   const isQrDataUrl = v => typeof v==="string" && /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length<8e6;
   const canShareFiles = (() => { try { return !!(navigator.canShare && navigator.share && navigator.canShare({files:[new File(["x"],"qr.jpg",{type:"image/jpeg"})]})); } catch(e) { return false; } })();
 
