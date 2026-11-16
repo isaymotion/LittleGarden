@@ -1,0 +1,190 @@
+"""Little Garden browser test (Playwright, Chromium). Serve the repo first, then run.
+See tools/README.md."""
+import json,sys,datetime
+from playwright.sync_api import sync_playwright
+import os
+URL=os.environ.get('LG_URL','http://localhost:8765/index.html')
+OUT=os.environ.get('LG_OUT','/tmp/lg-shots')
+os.makedirs(OUT,exist_ok=True)
+today=datetime.date.today()
+def d(off): return (today-datetime.timedelta(days=off)).isoformat()
+cats=["Groceries","Restaurants & Dining","Medications & Healthcare","Pets","Transportation","Shopping & Personal Care"]
+seed=[{"id":f"s{i}","date":d(i*3),"item":f"Item {i}","price":100+i*37.5,"category":cats[i%6],"notes":"note" if i%4==0 else "","createdAt":"2026-10-01T00:00:00.000Z"} for i in range(20)]
+seed.append({"id":"bad","date":"2026-02-31","item":"Broken","price":5,"category":"Pets"})
+seed.append({"id":"num","date":d(1),"item":"Numeric stamp","price":50,"category":"Pets","createdAt":1760000000000})
+errors=[]
+def check(name,cond):
+    print(('PASS ' if cond else 'FAIL ')+name)
+    if not cond: errors.append(name)
+with sync_playwright() as p:
+    b=p.chromium.launch()
+    for label,vp,scheme in [('phone',{'width':390,'height':844},'light'),('desktop',{'width':1366,'height':850},'dark')]:
+        ctx=b.new_context(viewport=vp,color_scheme=scheme,service_workers='block',accept_downloads=True)
+        pg=ctx.new_page()
+        pg.on('pageerror',lambda e:errors.append('pageerror '+str(e)) or print('PAGEERROR',e))
+        pg.on('console',lambda m: m.type=='error' and print('console',m.text))
+        pg.goto(URL); pg.evaluate("s=>{localStorage.clear();localStorage.setItem('little-garden-expenses-v1',s)}",json.dumps(seed)); pg.reload()
+        pg.wait_for_selector('#recentTransactions .recent-transaction')
+        check(label+' theme follows device',pg.evaluate("document.documentElement.dataset.theme")==scheme)
+        check(label+' damaged record skipped + warning','damaged record' in pg.inner_text('#formMessage'))
+        check(label+' recovery copy kept',pg.evaluate("localStorage.getItem('little-garden-expenses-recovery')!==null"))
+        check(label+' home visible only',pg.evaluate("[...document.querySelectorAll('.page-view')].filter(v=>!v.hidden).map(v=>v.dataset.view).join()")=='home')
+        nlog=pg.evaluate('window.APP_CHANGELOG.length')
+        check(label+' news badge for existing user',pg.evaluate("n=>[...document.querySelectorAll('[data-badge=news]')].some(e=>!e.hidden&&e.textContent===String(n))",nlog-1))
+        pg.screenshot(path=f'{OUT}/{label}-home.png')
+        # nav
+        if label=='phone':
+            pg.click('#menu-btn'); pg.wait_for_timeout(350)
+            check('drawer open',pg.evaluate("document.body.classList.contains('drawer-open')"))
+            pg.screenshot(path=f'{OUT}/{label}-drawer.png')
+            pg.click('.nav-item[href="#/insights"]')
+        else:
+            check('sidebar docked',pg.is_visible('.sidenav .nav-item[href="#/insights"]'))
+            pg.click('.nav-item[href="#/insights"]')
+        pg.wait_for_timeout(200)
+        check(label+' insights route',pg.evaluate("location.hash")=='#/insights' and pg.is_visible('#reportsView'))
+        check(label+' drawer closed',not pg.evaluate("document.body.classList.contains('drawer-open')"))
+        pg.screenshot(path=f'{OUT}/{label}-insights.png')
+        # chart slice -> transactions
+        pg.click('#categoryLegend .legend-item'); pg.wait_for_timeout(200)
+        check(label+' legend opens transactions',pg.evaluate("location.hash")=='#/transactions' and pg.is_visible('#journalView') and pg.input_value('#categoryFilter')!='')
+        nrows=pg.locator('#expenseRows tr').count(); check(label+' rows filtered',0<nrows<21)
+        # back button
+        pg.evaluate("document.getElementById('nav-back').click()"); pg.wait_for_timeout(200)
+        check(label+' back to insights',pg.evaluate("location.hash")=='#/insights' and not pg.is_disabled('#nav-fwd'))
+        pg.evaluate("document.getElementById('nav-fwd').click()"); pg.wait_for_timeout(200)
+        check(label+' forward',pg.evaluate("location.hash")=='#/transactions')
+        # edit
+        pg.click('#resetFiltersBtn'); check(label+' reset shows all',pg.locator('#expenseRows tr').count()==21)
+        pg.locator('[data-edit="s4"]').click(); pg.wait_for_timeout(250)
+        check(label+' edit opens form on home',pg.is_visible('#homeView') and pg.input_value('#expenseItem')=='Item 4' and pg.evaluate("document.activeElement.id")=='expenseItem')
+        check(label+' notes opened',pg.evaluate("document.getElementById('optionalFields').open"))
+        pg.fill('#expenseItem','Item 4 edited'); pg.click('#saveExpenseBtn'); pg.wait_for_timeout(250)
+        check(label+' returns to transactions after edit',pg.evaluate("location.hash")=='#/transactions')
+        st=pg.evaluate("JSON.parse(localStorage.getItem('little-garden-expenses-v1')).find(e=>e.id==='s4')")
+        check(label+' edit saved, createdAt kept',st['item']=='Item 4 edited' and st['createdAt']=='2026-10-01T00:00:00.000Z' and st['updatedAt']!=st['createdAt'])
+        # search from topbar on another page
+        pg.goto(URL+'#/tools'); pg.wait_for_timeout(200)
+        pg.fill('#q','edited'); pg.wait_for_timeout(250)
+        check(label+' topbar search',pg.evaluate("location.hash")=='#/transactions' and pg.locator('#expenseRows tr').count()==1 and pg.evaluate("document.activeElement.id")=='q')
+        pg.fill('#q',''); pg.wait_for_timeout(100)
+        # saved view healthcare
+        pg.select_option('#savedViewSelect','healthcare')
+        cats_shown=pg.evaluate("[...new Set([...document.querySelectorAll('#expenseRows .category-chip')].map(e=>e.textContent.replace(/^\\S+\\s/,'')))].join('|')")
+        check(label+' healthcare view only meds: '+cats_shown,cats_shown=='Medications & Healthcare')
+        # calendar
+        pg.goto(URL+'#/calendar'); pg.wait_for_timeout(200)
+        pg.click('.calendar-day.has-spending >> nth=0'); pg.wait_for_timeout(100)
+        check(label+' calendar day list',pg.locator('#calendarDayList .recent-transaction').count()>=1 and pg.is_visible('#openDayInJournalBtn'))
+        pg.screenshot(path=f'{OUT}/{label}-calendar.png',full_page=True)
+        pg.click('#openDayInJournalBtn'); pg.wait_for_timeout(200)
+        check(label+' day chip in transactions',pg.is_visible('#journalDateChip') and pg.locator('#expenseRows tr').count()>=1)
+        pg.click('#clearJournalDate'); check(label+' chip cleared',not pg.is_visible('#journalDateChip'))
+        pg.goto(URL+'#/calendar'); pg.wait_for_timeout(150)
+        m0=pg.input_value('#calendarMonth'); pg.click('#calendarView [data-month-step="-1"]'); 
+        check(label+' month step',pg.input_value('#calendarMonth')!=m0 and pg.input_value('#reportMonth')==pg.input_value('#calendarMonth'))
+        pg.goto(URL+'#/'); pg.wait_for_timeout(150)
+        check(label+' home stays current month',today.strftime('%B %Y')==pg.inner_text('#monthLabel'))
+        # whats new
+        pg.goto(URL+'#/whats-new'); pg.wait_for_timeout(200)
+        check(label+' news rendered',pg.locator('.news__entry').count()==nlog and pg.locator('.news__entry.is-new').count()==nlog-1)
+        check(label+' badge cleared',pg.evaluate("[...document.querySelectorAll('[data-badge=news]')].every(e=>e.hidden)"))
+        pg.screenshot(path=f'{OUT}/{label}-news.png')
+        pg.goto(URL+'#/about'); pg.wait_for_timeout(200)
+        pg.check('input[name=theme][value=dark]'); check(label+' theme dark via about',pg.evaluate("document.documentElement.dataset.theme")=='dark' and pg.evaluate("localStorage.getItem('little-garden-theme')")=='dark')
+        pg.screenshot(path=f'{OUT}/{label}-about.png',full_page=True)
+        pg.check('input[name=theme][value=auto]'); check(label+' theme auto',pg.evaluate("localStorage.getItem('little-garden-theme')") is None)
+        pg.click('#textSizeBtn'); pg.check('#textSizePanel input[value="125"]'); check(label+' text size',pg.evaluate("document.documentElement.style.fontSize")=='125%')
+        pg.check('#textSizePanel input[value="100"]'); pg.keyboard.press('Escape')
+        # legacy + missing
+        pg.goto(URL+'#journal'); pg.wait_for_timeout(150); check(label+' legacy hash',pg.is_visible('#journalView'))
+        pg.goto(URL+'#/nope'); pg.wait_for_timeout(150); check(label+' missing page',pg.is_visible('#missingView'))
+        # import: CSV twice, replace + undo
+        pg.goto(URL+'#/tools'); pg.wait_for_timeout(150)
+        csv="date,item,price,category,notes\n2026-11-01,Csv thing,12.50,Pets,\n2026-02-31,Bad date,5,Pets,\n"
+        pg.set_input_files('#importFile',{'name':'x.csv','mimeType':'text/csv','buffer':csv.encode()}); pg.wait_for_timeout(200)
+        check(label+' bad date rejected: '+pg.inner_text('#importMessage'),'invalid or missing date' in pg.inner_text('#importMessage'))
+        csv="date,item,price,category,notes\n2026-11-01,Csv thing,12.50,Pets,\n2019-03-05,Old year,99,Pets,\n"
+        for k in range(2):
+            pg.set_input_files('#importFile',{'name':'x.csv','mimeType':'text/csv','buffer':csv.encode()}); pg.wait_for_timeout(200)
+        check(label+' csv twice no dupes: '+pg.inner_text('#importMessage'),pg.evaluate("JSON.parse(localStorage.getItem('little-garden-expenses-v1')).length")==23)
+        check(label+' new year in menus',pg.evaluate("[...document.getElementById('heatmapYear').options].some(o=>o.value==='2019')&&[...document.getElementById('pdfYear').options].some(o=>o.value==='2019')"))
+        pg.once('dialog',lambda dl:dl.accept())
+        pg.select_option('#importMode','replace')
+        pg.set_input_files('#importFile',{'name':'b.json','mimeType':'application/json','buffer':json.dumps({"expenses":seed[:3],"savedViews":[{"name":"V","state":{"query":"x"}}]}).encode()}); pg.wait_for_timeout(250)
+        check(label+' replace',pg.evaluate("JSON.parse(localStorage.getItem('little-garden-expenses-v1')).length")==3 and pg.is_visible('#undoImportBtn'))
+        pg.once('dialog',lambda dl:dl.accept()); pg.click('#undoImportBtn'); pg.wait_for_timeout(200)
+        check(label+' undo import',pg.evaluate("JSON.parse(localStorage.getItem('little-garden-expenses-v1')).length")==23 and not pg.is_visible('#undoImportBtn'))
+        # export
+        with pg.expect_download() as dl: pg.click('#exportJsonBtn2')
+        data=json.load(open(dl.value.path())); check(label+' export has views+expenses',len(data['expenses'])==23 and 'savedViews' in data)
+        check(label+' backup meta','Last backup exported' in pg.inner_text('#backupMeta'))
+        # delete + undo
+        pg.goto(URL+'#/transactions'); pg.wait_for_timeout(150)
+        pg.locator('[data-delete="s2"]').click(); check(label+' deleted',pg.locator('#expenseRows tr').count()==22)
+        pg.click('#undoDeleteBtn'); check(label+' undo delete',pg.locator('#expenseRows tr').count()==23)
+        pg.screenshot(path=f'{OUT}/{label}-transactions.png')
+        # pdf
+        pg.goto(URL+'#/tools'); pg.wait_for_timeout(150)
+        with ctx.expect_page() as np_: pg.click('#exportPdfBtn')
+        rp=np_.value; rp.wait_for_timeout(300); txt=rp.inner_text('body'); check(label+' pdf weekly bins','Spending by week of the month' in txt and '1–7' in txt and '29–' in txt)
+        rp.close()
+        pg.screenshot(path=f'{OUT}/{label}-tools.png',full_page=True)
+
+        # ---- 2.1 features
+        pg.goto(URL+'#/'); pg.wait_for_timeout(200)
+        check(label+' no reminder right after a backup',not pg.is_visible('.notice'))
+        pg.evaluate("localStorage.setItem('little-garden-last-backup',new Date(Date.now()-40*86400000).toISOString())"); pg.reload(); pg.wait_for_timeout(200)
+        check(label+' backup reminder shown',pg.is_visible('.notice') and '40 days' in pg.inner_text('.notice'))
+        pg.click('[data-notice-later]'); check(label+' reminder snoozed',not pg.is_visible('.notice'))
+        pg.fill('#expenseItem','item 7'); pg.wait_for_timeout(50)
+        check(label+' suggestion fills category',pg.input_value('#expenseCategory')==cats[7%6])
+        pg.fill('#expenseItem','Coffee beans'); pg.fill('#expensePrice','300'); pg.select_option('#expenseCategory','Groceries'); pg.select_option('#expenseMethod','GCash'); pg.click('#saveExpenseBtn')
+        check(label+' method saved',pg.evaluate("JSON.parse(localStorage.getItem('little-garden-expenses-v1')).find(e=>e.item==='Coffee beans').method")=='GCash')
+        check(label+' method remembered',pg.input_value('#expenseMethod')=='GCash')
+        pg.goto(URL+'#/budget'); pg.wait_for_timeout(200)
+        pg.fill('#budgetOverall','1000'); pg.fill('#budgetCat0','200'); pg.click('#budgetForm button[type=submit]')
+        check(label+' budget saved: '+pg.inner_text('#budgetMessage'),'2 limits' in pg.inner_text('#budgetMessage'))
+        pg.fill('#recurringItem','Internet'); pg.fill('#recurringPrice','1699'); pg.fill('#recurringDay','31'); pg.select_option('#recurringCategory','Utilities & Internet'); pg.click('#recurringForm button[type=submit]')
+        check(label+' recurring listed',pg.locator('#recurringList .due-row').count()==1)
+        pg.fill('#incomeSource','Salary'); pg.fill('#incomeAmount','50000'); pg.click('#incomeForm button[type=submit]')
+        check(label+' income listed',pg.locator('#incomeList .due-row').count()==1 and '50,000' in pg.inner_text('#incomeMonthTotal'))
+        pg.screenshot(path=f'{OUT}/{label}-budget.png',full_page=True)
+        pg.goto(URL+'#/'); pg.wait_for_timeout(200)
+        check(label+' budget bars on home',pg.locator('#budgetHome .budget-row').count()==2 and pg.locator('#budgetHome .budget-over').count()>=1 and 'left after spending' in pg.inner_text('#budgetHome'))
+        check(label+' due panel',pg.is_visible('#duePanel') and pg.locator('#dueList .due-row').count()==1)
+        n0=pg.evaluate("JSON.parse(localStorage.getItem('little-garden-expenses-v1')).length")
+        pg.screenshot(path=f'{OUT}/{label}-home2.png',full_page=True)
+        pg.click('[data-due-add]'); pg.wait_for_timeout(100)
+        added=pg.evaluate("JSON.parse(localStorage.getItem('little-garden-expenses-v1')).find(e=>e.item==='Internet')")
+        check(label+' recurring added on last day of month: '+str(added and added['date']),added is not None and added['date'].startswith(today.strftime('%Y-%m')) and not pg.is_visible('#duePanel') and pg.evaluate("JSON.parse(localStorage.getItem('little-garden-expenses-v1')).length")==n0+1)
+        pg.goto(URL+'#/insights'); pg.wait_for_timeout(200)
+        pg.click('#methodLegend .legend-item >> text=GCash'); pg.wait_for_timeout(200)
+        check(label+' method filter',pg.locator('#expenseRows tr').count()==1 and 'Paid with GCash' in pg.inner_text('#journalDateChip'))
+        pg.click('#clearJournalDate')
+        if label=='phone':
+            check('phone cards no sideways scroll',pg.evaluate("(()=>{const t=document.querySelector('#journalView table');return t.scrollWidth<=t.clientWidth+1&&getComputedStyle(document.querySelector('#expenseRows tr')).display==='grid'})()"))
+            pg.screenshot(path=OUT+'/phone-cards.png')
+        # backup round trip with extras
+        pg.goto(URL+'#/tools'); pg.wait_for_timeout(150)
+        with pg.expect_download() as dl2: pg.click('#exportJsonBtn2')
+        full=json.load(open(dl2.value.path())); check(label+' backup carries extras',full['budgets']['overall']==1000 and len(full['recurring'])==1 and len(full['income'])==1)
+        pg.evaluate("['little-garden-budgets','little-garden-recurring','little-garden-income-v1'].forEach(k=>localStorage.removeItem(k))"); pg.reload(); pg.wait_for_timeout(200)
+        pg.select_option('#importMode','merge')
+        pg.set_input_files('#importFile',{'name':'full.json','mimeType':'application/json','buffer':json.dumps(full).encode()}); pg.wait_for_timeout(250)
+        check(label+' extras restored: '+pg.inner_text('#importMessage'),pg.evaluate("JSON.parse(localStorage.getItem('little-garden-budgets')).overall")==1000 and pg.evaluate("JSON.parse(localStorage.getItem('little-garden-income-v1')).length")==1 and '0 added' in pg.inner_text('#importMessage'))
+        with pg.expect_download() as dl3: pg.click('#exportCsvBtn')
+        check(label+' csv has method',',method,' in open(dl3.value.path(),encoding='utf-8-sig').readline())
+        # overflow check
+        for r in ['#/','#/transactions','#/insights','#/calendar','#/budget','#/tools','#/whats-new','#/about']:
+            pg.goto(URL+r); pg.wait_for_timeout(150)
+            ow=pg.evaluate("document.documentElement.scrollWidth-window.innerWidth"); check(f'{label} no horizontal overflow {r} ({ow})',ow<=1)
+        ctx.close()
+    # brand-new visitor: no badge
+    ctx=b.new_context(viewport={'width':390,'height':844},service_workers='block'); pg=ctx.new_page(); pg.goto(URL); pg.wait_for_timeout(300)
+    check('new visitor no badge',pg.evaluate("[...document.querySelectorAll('[data-badge=news]')].every(e=>e.hidden)"))
+    pg.fill('#expenseItem','First'); pg.fill('#expensePrice','10'); pg.click('#saveExpenseBtn')
+    check('add works',pg.locator('#recentTransactions .recent-transaction').count()==1 and pg.inner_text('#monthCount')=='1')
+    pg.screenshot(path=OUT+'/phone-new.png',full_page=True)
+    b.close()
+print('ERRORS',errors)
