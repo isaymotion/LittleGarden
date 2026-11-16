@@ -3,7 +3,7 @@
 ## 1. Project and audience
 - **What:** Little Garden, Dr. Isabella Navarro's personal monthly expense tracker in Philippine pesos (PHP). Private, offline, data only in the browser (localStorage). Originally built by ChatGPT; rebuilt and extended by Claude on 2026-11-16.
 - **Repo:** `isaymotion/LittleGarden` (GitHub; the clone URL is lowercase `littlegarden`). Live from `main` on GitHub Pages: https://isaymotion.github.io/LittleGarden/
-- **Branches:** `main` = the site. `dev-tools` = this doc plus `tools/` (never merged into main).
+- **Branches:** `main` = the site. `dev-tools` = this doc plus `tools/` (browser_test.py, update_test.py, README; never merged into main).
 - **Current version:** 2.3.1 (2026-11-16, PR #5 merged). Open PRs: none.
 
 ## 2. Fixed rules
@@ -64,9 +64,11 @@ Examples:
 git clone --depth 1 https://github.com/isaymotion/littlegarden /home/claude/littlegarden
 git -C /home/claude/littlegarden fetch --depth=1 origin dev-tools:refs/remotes/origin/dev-tools   # the plain fetch leaves no origin/dev-tools ref in a shallow clone
 git -C /home/claude/littlegarden show origin/dev-tools:tools/browser_test.py > /home/claude/browser_test.py
+git -C /home/claude/littlegarden show origin/dev-tools:tools/update_test.py > /home/claude/update_test.py
 cd /home/claude/littlegarden && (python3 -m http.server 8765 >/dev/null 2>&1 &) && sleep 1
 python3 /home/claude/browser_test.py | grep -v '^PASS'    # passing = only "ERRORS []" (169 PASS lines; needs Pillow)
 pkill -f "http.server 8765"
+python3 /home/claude/update_test.py /home/claude/littlegarden   # only if sw.js or initUpdates changed: 4 PASS, "ERRORS []"
 ```
 Screenshots go to `/tmp/lg-shots` (phone-*.png, desktop-*.png). Look at them after visual changes.
 
@@ -106,7 +108,7 @@ Screenshots go to `/tmp/lg-shots` (phone-*.png, desktop-*.png). Look at them aft
 - The What's New badge for an existing user counts every entry after the first release. A brand-new visitor starts at zero.
 
 - **Update logic** (`initUpdates`): registers `sw.js` with `updateViaCache:"none"`, calls `reg.update()` when the app becomes visible (30 s throttle), reloads on `controllerchange` except the very first takeover (a fresh page with no controller). If she is typing (focus in a field, form has text, or a Pay me editor is open) the reload waits until the app is hidden. Bug found and fixed while building: a plain `hadController` const made a first-visit page ignore every later update.
-- To test updates for real: serve a copy of the repo on another port, launch Playwright **without** `service_workers='block'`, bump `VERSION` in the copy's sw.js, call `reg.update()`, and check a `window.__m` marker disappears (reloaded).
+- To test updates for real, run `tools/update_test.py` (section 5). browser_test.py blocks service workers, so it cannot catch update bugs.
 - Headless Chromium has no file sharing, so Pay me shows "Save picture" there; on iPhone it shows "Share". Share builds the File synchronously before `navigator.share()` because iOS needs the call right after the tap.
 - In Playwright, give the clipboard permission with `ctx.grant_permissions([...], origin=...)` before testing Copy.
 - On a shallow clone, re-fetching dev-tools may be refused as non-fast-forward; use `git fetch --depth=3 origin +dev-tools:refs/remotes/origin/dev-tools`.

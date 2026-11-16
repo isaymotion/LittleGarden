@@ -26,4 +26,14 @@ Needs: `pip install playwright` (already present in Claude's workspace) and Chro
 WebKit cannot be installed in Claude's workspace (download blocked), so iPhone Safari quirks
 cannot be tested here: ask her for a screenshot.
 
+## update_test.py
+Checks the automatic-update logic with service workers ON (browser_test.py blocks them). Serves a
+throwaway copy of the repo on port 8766 (`LG_UPDATE_PORT`), publishes fake versions by editing the
+copy's sw.js, and checks: first install no reload, idle update reloads, second update reloads, typing defers.
+
+```bash
+python3 /path/to/update_test.py /path/to/littlegarden    # 4 PASS lines, ends with: ERRORS []
+```
+Run it whenever `initUpdates` in app.js or `sw.js` changes.
+
 When a release adds or changes a feature, add checks to this file and push it back to `dev-tools`.
