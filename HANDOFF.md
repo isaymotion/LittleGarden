@@ -22,7 +22,7 @@
 Plain HTML/CSS/JS, no build step.
 ```
 index.html            shell (topbar, sidenav, tab bar, footer) + every screen as <div class="page-view" data-view="...">
-styles.css            original styles, then appended blocks: "Version 2 shell", "Version 2.1", iOS date fix
+styles.css            original styles, then appended blocks: "Version 2 shell", "Version 2.1", iOS date fix, "Version 2.3: Pay me"
 app.js                one IIFE: data + rendering, "Version 2.1" features, "Version 2.3" Pay me + initUpdates, then the app shell (router, menu, theme...)
 data/app-meta.js      window.APP_META {name, short, tagline, version, repo}, APP_LINKS, SHOW_OTHER_APPS=false
 data/changelog.js     window.APP_CHANGELOG, newest first
@@ -86,7 +86,7 @@ Screenshots go to `/tmp/lg-shots` (phone-*.png, desktop-*.png). Look at them aft
 | Browser test | 169 checks, all pass on 2.3.1 |
 
 ## 7. Next steps
-- First ask: (1) after closing and reopening the app, does About show 2.3.0? Once she is on 2.3.0 later updates arrive by themselves. (2) Do the date boxes fit (2.1.1)? (3) Did a Pay me QR upload, show and share work on her iPhone?
+- First ask: (1) after closing and reopening the app, does About show 2.3.1? Once she is on 2.3.0 or later, updates arrive by themselves. (2) Do the date boxes fit (2.1.1)? (3) Did a Pay me QR upload, show and share work on her iPhone?
 - Pay me ideas not built (offer only if she asks): more accounts (one line each, see section 2), reordering, auto-cropping the QR from a full screenshot, raising screen brightness (not possible from a web page).
 - Open choice from 2.2.0: she may want Clothes moved to the "Health & care" area beside Shopping & Personal Care. It is a one-line `area:` change in `categories` in app.js, plus the README table.
 - Known limits she was told about, if she asks:
@@ -94,7 +94,7 @@ Screenshots go to `/tmp/lg-shots` (phone-*.png, desktop-*.png). Look at them aft
   - recurring items are monthly only;
   - the payment-method list is fixed.
 - Other apps menu group: `SHOW_OTHER_APPS` is false in `data/app-meta.js`, as in her other apps. Turn it on only when she interlinks them all.
-- The next version is 2.3.1 for a fix or 2.4.0 for a feature.
+- The next version is 2.3.2 for a fix or 2.4.0 for a feature.
 
 ## 8. Pitfalls learned
 - **iOS Safari date and month inputs** have a native minimum width and centred text, so they overflow cards. The fix is at the end of styles.css (`appearance:none; min-width:0`). WebKit can't be installed here, so ask for a screenshot.
@@ -106,7 +106,6 @@ Screenshots go to `/tmp/lg-shots` (phone-*.png, desktop-*.png). Look at them aft
 - `go(name, after)` runs `after` once the screen shows (used for focusing the form on Edit).
 - CSV rows without IDs are de-duplicated on date+item+price+category+notes (method left out on purpose).
 - The What's New badge for an existing user counts every entry after the first release. A brand-new visitor starts at zero.
-
 - **Update logic** (`initUpdates`): registers `sw.js` with `updateViaCache:"none"`, calls `reg.update()` when the app becomes visible (30 s throttle), reloads on `controllerchange` except the very first takeover (a fresh page with no controller). If she is typing (focus in a field, form has text, or a Pay me editor is open) the reload waits until the app is hidden. Bug found and fixed while building: a plain `hadController` const made a first-visit page ignore every later update.
 - To test updates for real, run `tools/update_test.py` (section 5). browser_test.py blocks service workers, so it cannot catch update bugs.
 - Headless Chromium has no file sharing, so Pay me shows "Save picture" there; on iPhone it shows "Share". Share builds the File synchronously before `navigator.share()` because iOS needs the call right after the tap.
