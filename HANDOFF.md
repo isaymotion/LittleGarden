@@ -4,7 +4,7 @@
 - **What:** Little Garden, Dr. Isabella Navarro's personal monthly expense tracker in Philippine pesos (PHP). Private, offline, data only in the browser (localStorage + IndexedDB). Originally built by ChatGPT; rebuilt and extended by Claude from 2026-11-16.
 - **Repo:** `isaymotion/LittleGarden` (GitHub; the clone URL is lowercase `littlegarden`). Live from `main` on GitHub Pages: https://isaymotion.github.io/LittleGarden/
 - **Branches:** `main` = the site. `dev-tools` = this doc plus `tools/` (browser_test.py, update_test.py, README; never merged into main).
-- **Live version:** 2.3.1. **Version 2.4.0 is built and waiting in PR #6** (branch `claude/trips-and-more`, 2026-11-16). Claude's merge call was blocked by the session's permission check, so the PR is open until she merges it or tells Claude to. **First thing next session: check whether PR #6 is merged.**
+- **Current version:** 2.4.0 (PR #6 merged 2026-11-17 after she said "Merge please"). Open PRs: none.
 
 ## 2. Fixed rules
 - Footer and About attribution, exact: `App created by Isabella Navarro, MD. Latest version November 2026. isaymotion@gmail.com` (email is a mailto link). Only the month ever changes.
@@ -59,7 +59,7 @@ Examples:
 5. `node --check app.js`, then run the browser test (section 5) and add checks for the new feature.
 6. Run `check_sw.py` from the `isaymotion-app-design` skill on the repo. Must PASS.
 7. Commit (attribution lines per the system reminder), then `git -c push.negotiate=true push -u origin claude/<topic>`.
-8. Open the PR with `gh api repos/isaymotion/LittleGarden/pulls -f title=… -f head=… -f base=main -f body=…`, then merge with `gh api -X PUT repos/isaymotion/LittleGarden/pulls/N/merge -f merge_method=merge`. She asked for updates to be pushed live. **On 2026-11-16 the merge call for PR #6 was denied by the session's permission check**: if that happens, do not try another route; leave the PR open and ask her to merge it or to confirm.
+8. Open the PR with `gh api repos/isaymotion/LittleGarden/pulls -f title=… -f head=… -f base=main -f body=…`, then merge with `gh api -X PUT repos/isaymotion/LittleGarden/pulls/N/merge -f merge_method=merge`. She asked for updates to be pushed live. The merge call can be denied by the session's permission check when she has not said "merge" in the chat (it happened with PR #6): do not try another route; leave the PR open and ask her. Once she said "Merge please" it went through.
 9. Tell her: wait a minute or two for Pages, then close and reopen the app.
 
 ## 5. Commands
@@ -73,7 +73,6 @@ python3 /home/claude/browser_test.py | grep -v '^PASS'    # passing = only "ERRO
 pkill -f "http.server 8765"
 python3 /home/claude/update_test.py /home/claude/littlegarden   # only if sw.js or initUpdates changed: 4 PASS, "ERRORS []"
 ```
-**The dev-tools browser test now expects 2.4.0.** Run against `main` before PR #6 is merged, it fails; check out `claude/trips-and-more` instead.
 Screenshots go to `/tmp/lg-shots` (phone-*.png, desktop-*.png, phone-dark-*.png). Look at them after visual changes. Full-page phone shots show the sticky top bar and tab bar in the middle of the picture; that is the screenshot, not a bug.
 
 ## 6. Status
@@ -87,18 +86,18 @@ Screenshots go to `/tmp/lg-shots` (phone-*.png, desktop-*.png, phone-dark-*.png)
 | Clothes and Books categories | Done (2.2.0); Clothes moved to Health & care (2.4.0) |
 | Pay me (QR codes, viewer, Home row, backup) | Done (2.3.x); **upload, show and share confirmed on her iPhone** |
 | Automatic updates | Fixed (2.3.0); **confirmed: her iPhone showed 2.3.1** |
-| Trips with foreign-currency entry | Built (2.4.0, PR #6); not yet tried on her iPhone |
-| Phone + button, tucked-away form, toast with Undo | Built (2.4.0, PR #6); not yet tried on her iPhone |
-| Repeat an expense | Built (2.4.0, PR #6) |
-| Budget "Getting close" + per-day figure | Built (2.4.0, PR #6). The amber bar at 80% already existed; 2.4.0 added the wording and the per-day figure |
-| Income in PDF and Insights chart with savings rate | Built (2.4.0, PR #6) |
-| Recurring weekly / every 3 months / yearly | Built (2.4.0, PR #6) |
-| Editable payment methods | Built (2.4.0, PR #6) |
-| Save to Files or iCloud button | Built (2.4.0, PR #6); **tested only with a stubbed share sheet, never on a real iPhone** |
-| Browser test | 243 checks, all pass on the 2.4.0 branch; update test 4 pass; check_sw PASS |
+| Trips with foreign-currency entry | Built (2.4.0); not yet tried on her iPhone |
+| Phone + button, tucked-away form, toast with Undo | Built (2.4.0); not yet tried on her iPhone |
+| Repeat an expense | Built (2.4.0) |
+| Budget "Getting close" + per-day figure | Built (2.4.0). The amber bar at 80% already existed; 2.4.0 added the wording and the per-day figure |
+| Income in PDF and Insights chart with savings rate | Built (2.4.0) |
+| Recurring weekly / every 3 months / yearly | Built (2.4.0) |
+| Editable payment methods | Built (2.4.0) |
+| Save to Files or iCloud button | Built (2.4.0); **tested only with a stubbed share sheet, never on a real iPhone** |
+| Browser test | 243 checks, all pass on 2.4.0; update test 4 pass; check_sw PASS |
 
 ## 7. Next steps
-- First: is PR #6 merged? If not, ask her. If yes, ask after she reopens the app: (1) does About show 2.4.0? (2) does the + button open the form and does the keyboard come up? (3) does "Save to Files or iCloud" appear in Tools and backup, and does the file arrive in Files? (4) does typing a price in yen on a trip work?
+- First ask, after she has reopened the app: (1) does About show 2.4.0? (2) does the + button open the form and does the keyboard come up? (3) does "Save to Files or iCloud" appear in Tools and backup, and does the file arrive in Files? (4) does typing a price in yen on a trip work?
 - Her Japan trip runs Nov 30 to Dec 14, 2026. She has to add the trip herself in Trips, with her own exchange rate. The app has no live rates (it makes no outside requests) and Claude must not suggest a rate from memory.
 - Trip ideas not built (offer only if she asks): a budget per trip, a trip section in the PDF report, more than one currency per trip, splitting a shared cost.
 - Recurring limit: an item not added before its period ends is not carried over (same as before 2.4).
