@@ -33,6 +33,7 @@
     {name:"Utilities & Internet", icon:"💧", area:"Daily living", color:"#79b9c0"},
     {name:"Pets", icon:"🐾", area:"Health & care", color:"#c59b75"},
     {name:"Transportation", icon:"🚲", area:"Property & transport", color:"#8099c5"},
+    {name:"Travel", icon:"✈️", area:"Property & transport", color:"#4f9a8f"},
     {name:"Shopping & Personal Care", icon:"🌷", area:"Health & care", color:"#df9fc0"},
     {name:"Clothes", icon:"👗", area:"Health & care", color:"#c47fa5"},
     {name:"Hobbies & Entertainment", icon:"🎨", area:"Lifestyle & other", color:"#b7a2d3"},

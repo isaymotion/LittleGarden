@@ -6,7 +6,7 @@ A mobile-first, garden-inspired monthly expense tracker for GitHub Pages. Record
 
 - **Local-first storage:** expenses are saved in this browser using `localStorage`; no account or server/database is needed.
 - **Entry fields:** date, item/description, price in PHP, fixed category, and optional notes.
-- **14 fixed categories:** Groceries; Restaurants & Dining; Medications & Healthcare; Property & Real Estate; Utilities & Internet; Pets; Transportation; Shopping & Personal Care; Clothes; Hobbies & Entertainment; Education & Professional Development; Books; Gifts & Donations; Miscellaneous.
+- **15 fixed categories:** Groceries; Restaurants & Dining; Medications & Healthcare; Property & Real Estate; Utilities & Internet; Pets; Transportation; Travel; Shopping & Personal Care; Clothes; Hobbies & Entertainment; Education & Professional Development; Books; Gifts & Donations; Miscellaneous.
 - **Home dashboard:** quick expense entry, monthly summary, and the five most recent transactions; select a recent item to jump to its matching transaction.
 - **Insights:** monthly totals, category and area charts, daily spending, comparisons, calendar, and yearly trends.
 - **Transactions:** searchable, filterable, sortable history with edit and delete actions; shown as cards on phones.
@@ -35,7 +35,7 @@ A mobile-first, garden-inspired monthly expense tracker for GitHub Pages. Record
 |---|---|
 | Daily living | Groceries, Restaurants & Dining, Utilities & Internet |
 | Health & care | Medications & Healthcare, Pets, Shopping & Personal Care, Clothes |
-| Property & transport | Property & Real Estate, Transportation |
+| Property & transport | Property & Real Estate, Transportation, Travel |
 | Lifestyle & other | Hobbies & Entertainment, Education & Professional Development, Books, Gifts & Donations, Miscellaneous |
 
 ## Run locally
