@@ -4,7 +4,7 @@
 - **What:** Little Garden, Dr. Isabella Navarro's personal monthly expense tracker in Philippine pesos (PHP). Private, offline, data only in the browser (localStorage + IndexedDB). Originally built by ChatGPT; rebuilt and extended by Claude from 2026-11-16.
 - **Repo:** `isaymotion/LittleGarden` (GitHub; the clone URL is lowercase `littlegarden`). Live from `main` on GitHub Pages: https://isaymotion.github.io/LittleGarden/
 - **Branches:** `main` = the site. `dev-tools` = this doc plus `tools/` (browser_test.py, update_test.py, README; never merged into main).
-- **Current version:** 2.6.0 (2026-11-22, Subscriptions) on branch `claude/subscriptions`, **PR #8 open, not merged** (merge call denied by the permission check; merge once she says "merge"). `main` is 2.5.0 = PR #7 (seven new categories), merged 2026-11-21. 2.4.0 = PR #6 (trips and more), merged 2026-11-17. 2.4.1 and 2.4.2 = Ko-fi support link and card, committed straight to `main` by another chat on 2026-11-21.
+- **Current version:** 2.6.0 (2026-11-22, Subscriptions) = PR #8, merged 2026-11-22. Open PRs: none. 2.5.0 = PR #7 (seven new categories), merged 2026-11-21. 2.4.0 = PR #6 (trips and more), merged 2026-11-17. 2.4.1 and 2.4.2 = Ko-fi support link and card, committed straight to `main` by another chat on 2026-11-21.
 
 ## 2. Fixed rules
 - Footer and About attribution, exact: `App created by Isabella Navarro, MD. Latest version November 2026. isaymotion@gmail.com` (email is a mailto link). Only the month ever changes.
@@ -99,18 +99,18 @@ Screenshots go to `/tmp/lg-shots` (phone-*.png, desktop-*.png, phone-dark-*.png)
 | Save to Files or iCloud button | Built (2.4.0); **tested only with a stubbed share sheet, never on a real iPhone** |
 | Ko-fi support link and card | Done (2.4.1, 2.4.2), by another chat |
 | Seven new categories (Travel, Rent & Housing, Subscriptions, Coffee & Snacks, Beauty & Grooming, Taxes & Government Fees, Professional Fees) | Built and merged (2.5.0, PR #7); not yet seen on her iPhone |
-| Subscriptions screen: auto-debit, Renewed / Let it end, Home card + menu count, Add to Calendar (.ics), migration from Recurring | Built (2.6.0), PR #8 open awaiting her "merge". **.ics on iPhone untested** (headless Chromium only checks the file contents) |
+| Subscriptions screen: auto-debit, Renewed / Let it end, Home card + menu count, Add to Calendar (.ics), migration from Recurring | Built and merged (2.6.0, PR #8). **.ics on iPhone untested** (headless Chromium only checks the file contents) |
 | Browser test | 271 checks, all pass on 2.6.0 (2026-11-22; subscriptions block in its own context at the end); update test PASS on 2.6.0; check_sw PASS on 2.6.0 |
 
 ## 7. Next steps
-- PR #8 (2.6.0 Subscriptions) is open: merge when she says "merge". Then ask, after she has reopened the app: (0) does Add to Calendar on a subscription open the iPhone "Add to Calendar" sheet (or land in Files, where tapping it adds it)? If it does neither, switch `subCalendarFile` to `navigator.share` with a text/calendar File or a data: URL. (1) does About show 2.6.0, and are the new categories in the form? (2) does the + button open the form and does the keyboard come up? (3) does "Save to Files or iCloud" appear in Tools and backup, and does the file arrive in Files? (4) does typing a price in yen on a trip work?
+- 2.6.0 is live (merged 2026-11-22). Ask, after she has reopened the app: (0) does Add to Calendar on a subscription open the iPhone "Add to Calendar" sheet (or land in Files, where tapping it adds it)? If it does neither, switch `subCalendarFile` to `navigator.share` with a text/calendar File or a data: URL. (1) does About show 2.6.0, and are the new categories in the form? (2) does the + button open the form and does the keyboard come up? (3) does "Save to Files or iCloud" appear in Tools and backup, and does the file arrive in Files? (4) does typing a price in yen on a trip work?
 - Her Japan trip runs Nov 30 to Dec 14, 2026. She has to add the trip herself in Trips, with her own exchange rate. The app has no live rates (it makes no outside requests) and Claude must not suggest a rate from memory.
 - Trip ideas not built (offer only if she asks): a budget per trip, a trip section in the PDF report, more than one currency per trip, splitting a shared cost.
 - Recurring limit: an item not added before its period ends is not carried over (same as before 2.4).
 - Known limits she was told about, if she asks: income is not in the category trend chart (it has its own chart); custom payment methods get an automatic colour.
 - Pay me ideas not built (offer only if she asks): more accounts, reordering, auto-cropping the QR from a full screenshot.
 - Other apps menu group: `SHOW_OTHER_APPS` is false in `data/app-meta.js`, as in her other apps. Turn it on only when she interlinks them all.
-- The next version is 2.6.1 for a fix or 2.7.0 for a feature (2.6.0 if PR #8 was never merged) (check `data/app-meta.js` on `main` first, in case another chat released since).
+- The next version is 2.6.1 for a fix or 2.7.0 for a feature (check `data/app-meta.js` on `main` first, in case another chat released since).
 - Ko-fi checks were added to the browser test in 2.5.0.
 - Subscriptions design (her choices, 2026-11-22): own screen; auto-debit adds the payment by itself with Undo; Add to Calendar for real phone notifications (the app has no server, so no push); monthly/yearly recurring items in Subscriptions moved over once as paid by hand (weekly/quarterly ones stay in Recurring). New and edited dates must be today or later (the input has `min`), so nothing is back-filled by surprise. Undo of an auto-debit removes the payment but keeps the date moved on (otherwise it would be re-added); Undo of Renewed also restores the date.
 - Subscription ideas not built (offer only if she asks): quarterly cycle, free-trial end dates, price-change history, a subscriptions section in the PDF report.
