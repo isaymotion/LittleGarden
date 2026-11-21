@@ -42,6 +42,10 @@ with sync_playwright() as p:
         nlog=pg.evaluate('window.APP_CHANGELOG.length')
         check(label+' news badge for existing user',pg.evaluate("n=>[...document.querySelectorAll('[data-badge=news]')].some(e=>!e.hidden&&e.textContent===String(n))",nlog-1))
         pg.screenshot(path=f'{OUT}/{label}-home.png')
+        opts=pg.evaluate("[...document.querySelectorAll('#expenseCategory option')].map(o=>o.value)")
+        check(label+' 15 categories with Travel, Misc last',len(opts)==15 and 'Travel' in opts and 'Pets' in opts and opts[-1]=='Miscellaneous')
+        check(label+' Travel in filter and budget',pg.evaluate("[...document.querySelectorAll('#categoryFilter option')].some(o=>o.value==='Travel') && [...document.querySelectorAll('#budgetCategoryFields label')].some(l=>l.textContent.includes('Travel'))"))
+        check(label+' Ko-fi on Home and footer',pg.evaluate("!!document.querySelector('[data-view=home] .support-card a[href=\"https://ko-fi.com/isaymotion\"]') && !!document.querySelector('.support-line a[href=\"https://ko-fi.com/isaymotion\"]')"))
         # nav
         if label=='phone':
             pg.click('#menu-btn'); pg.wait_for_timeout(350)
@@ -101,6 +105,7 @@ with sync_playwright() as p:
         check(label+' badge cleared',pg.evaluate("[...document.querySelectorAll('[data-badge=news]')].every(e=>e.hidden)"))
         pg.screenshot(path=f'{OUT}/{label}-news.png')
         pg.goto(URL+'#/about'); pg.wait_for_timeout(200)
+        check(label+' Ko-fi card on About',pg.evaluate("!!document.querySelector('[data-view=about] .support-card a[href=\"https://ko-fi.com/isaymotion\"]')"))
         pg.check('input[name=theme][value=dark]'); check(label+' theme dark via about',pg.evaluate("document.documentElement.dataset.theme")=='dark' and pg.evaluate("localStorage.getItem('little-garden-theme')")=='dark')
         pg.screenshot(path=f'{OUT}/{label}-about.png',full_page=True)
         pg.check('input[name=theme][value=auto]'); check(label+' theme auto',pg.evaluate("localStorage.getItem('little-garden-theme')") is None)

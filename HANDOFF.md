@@ -4,7 +4,7 @@
 - **What:** Little Garden, Dr. Isabella Navarro's personal monthly expense tracker in Philippine pesos (PHP). Private, offline, data only in the browser (localStorage + IndexedDB). Originally built by ChatGPT; rebuilt and extended by Claude from 2026-11-16.
 - **Repo:** `isaymotion/LittleGarden` (GitHub; the clone URL is lowercase `littlegarden`). Live from `main` on GitHub Pages: https://isaymotion.github.io/LittleGarden/
 - **Branches:** `main` = the site. `dev-tools` = this doc plus `tools/` (browser_test.py, update_test.py, README; never merged into main).
-- **Current version:** 2.4.2 (2026-11-21). 2.4.0 = PR #6 (trips and more), merged 2026-11-17. 2.4.1 and 2.4.2 = Ko-fi support link and card, committed straight to `main` by another chat on 2026-11-21. Open PRs: none.
+- **Current version:** 2.5.0 (2026-11-21) on branch `claude/travel-category`, **PR #7 open, not merged** (merge call denied by the permission check; merge once she says "merge"). `main` is still 2.4.2. 2.4.0 = PR #6 (trips and more), merged 2026-11-17. 2.4.1 and 2.4.2 = Ko-fi support link and card, committed straight to `main` by another chat on 2026-11-21.
 
 ## 2. Fixed rules
 - Footer and About attribution, exact: `App created by Isabella Navarro, MD. Latest version November 2026. isaymotion@gmail.com` (email is a mailto link). Only the month ever changes.
@@ -14,7 +14,7 @@
 - `sw.js` deletes only caches starting with `little-garden-` (all her apps share the isaymotion.github.io origin).
 - Every release bumps three things that must agree: newest entry in `data/changelog.js`, `version` in `data/app-meta.js`, `VERSION` in `sw.js`. The footer month stays "November 2026" until a release in a later month.
 - Pay me account list (`PAY_ACCOUNTS` in app.js) is fixed: e-wallets GCash, Maya (PayMaya); banks in alphabetical order BDO, BPI, GoTyme, MariBank, Maya Bank, Metrobank, Security Bank, UnionBank. Ids are storage keys, never rename them. Badges are coloured letters from each entry's `short` field (no bank logos); 3-letter badges get `.pay-badge--3`. To add a bank: one line in `PAY_ACCOUNTS` with a unique id and `short`, then update the test's account counts (10 add rows, 9 after one save).
-- Category list: 14 fixed; **Miscellaneous must stay last** (`getCategory` falls back to the last entry). Clothes is in the "Health & care" area since 2.4.0 (her choice).
+- Category list: 15 fixed; **Miscellaneous must stay last** (`getCategory` falls back to the last entry). Clothes is in the "Health & care" area since 2.4.0 (her choice). Pets (🐾, Health & care) has existed since 1.x. ✈️ Travel added in 2.5.0, Property & transport area, right after Transportation. Budgets are keyed by category name, so inserting mid-list is safe; to add one: a line in `categories` in app.js, then "N categories" in index.html (Insights subtitle) and README (list and area table), and the count in the browser test.
 - `price` on an expense is **always pesos**. A foreign amount is extra (`fxAmount`, `fxCurrency`), never a replacement.
 - **Ko-fi support** (2.4.1/2.4.2, same as her other apps): `kofi` in `data/app-meta.js`, a `.support-line` link under the footer attribution, and a `.support-card` panel at the end of Home (index.html) and About (`renderAbout` in app.js), link `https://ko-fi.com/isaymotion`. Keep them.
 - Her preference: use subagents for simple tasks to save tokens; Claude keeps design and final review.
@@ -70,7 +70,7 @@ git -C /home/claude/littlegarden fetch --depth=1 origin dev-tools:refs/remotes/o
 git -C /home/claude/littlegarden show origin/dev-tools:tools/browser_test.py > /home/claude/browser_test.py
 git -C /home/claude/littlegarden show origin/dev-tools:tools/update_test.py > /home/claude/update_test.py
 cd /home/claude/littlegarden && (python3 -m http.server 8765 >/dev/null 2>&1 &) && sleep 1
-python3 /home/claude/browser_test.py | grep -v '^PASS'    # passing = only "ERRORS []" (243 PASS lines on 2.4.2; needs Pillow)
+python3 /home/claude/browser_test.py | grep -v '^PASS'    # passing = only "ERRORS []" (251 PASS lines on 2.5.0; needs Pillow)
 pkill -f "http.server 8765"
 python3 /home/claude/update_test.py /home/claude/littlegarden   # only if sw.js or initUpdates changed: 4 PASS, "ERRORS []"
 ```
@@ -96,10 +96,11 @@ Screenshots go to `/tmp/lg-shots` (phone-*.png, desktop-*.png, phone-dark-*.png)
 | Editable payment methods | Built (2.4.0) |
 | Save to Files or iCloud button | Built (2.4.0); **tested only with a stubbed share sheet, never on a real iPhone** |
 | Ko-fi support link and card | Done (2.4.1, 2.4.2), by another chat |
-| Browser test | 243 checks, all pass on 2.4.2 (re-run 2026-11-21); update test 4 pass on 2.4.0; check_sw PASS on 2.4.0 |
+| Travel category | Built (2.5.0), PR #7 open, awaiting her "merge" |
+| Browser test | 251 checks, all pass on 2.5.0 (2026-11-21; adds 15-category/Travel and Ko-fi Home/About/footer checks); update test 4 pass on 2.4.0; check_sw PASS on 2.5.0 |
 
 ## 7. Next steps
-- No work is in progress. First ask, after she has reopened the app: (1) does About show 2.4.2 (or later)? (2) does the + button open the form and does the keyboard come up? (3) does "Save to Files or iCloud" appear in Tools and backup, and does the file arrive in Files? (4) does typing a price in yen on a trip work?
+- PR #7 (2.5.0, Travel) is open: merge when she says so, then the questions below apply to 2.5.0. First ask, after she has reopened the app: (1) does About show 2.4.2 (or later)? (2) does the + button open the form and does the keyboard come up? (3) does "Save to Files or iCloud" appear in Tools and backup, and does the file arrive in Files? (4) does typing a price in yen on a trip work?
 - Her Japan trip runs Nov 30 to Dec 14, 2026. She has to add the trip herself in Trips, with her own exchange rate. The app has no live rates (it makes no outside requests) and Claude must not suggest a rate from memory.
 - Trip ideas not built (offer only if she asks): a budget per trip, a trip section in the PDF report, more than one currency per trip, splitting a shared cost.
 - Recurring limit: an item not added before its period ends is not carried over (same as before 2.4).
@@ -107,7 +108,8 @@ Screenshots go to `/tmp/lg-shots` (phone-*.png, desktop-*.png, phone-dark-*.png)
 - Pay me ideas not built (offer only if she asks): more accounts, reordering, auto-cropping the QR from a full screenshot.
 - Other apps menu group: `SHOW_OTHER_APPS` is false in `data/app-meta.js`, as in her other apps. Turn it on only when she interlinks them all.
 - The next version is 2.4.3 for a fix or 2.5.0 for a feature (check `data/app-meta.js` on `main` first, in case another chat released since).
-- The browser test has no checks for the Ko-fi card yet; add one (link present on Home, About and footer) in the next release.
+- Ko-fi checks were added to the browser test in 2.5.0.
+- Category ideas offered to her on 2026-11-21, none built (build only the ones she picks): Rent/Housing (could split from Property), Insurance, Personal loans/debt payments, Savings & investments (not really spending), Family support/padala, Subscriptions, Kids/Family, Fitness & sports, Coffee & snacks, Beauty & grooming (split from Shopping & Personal Care), Taxes & government fees, Work expenses/professional fees (PRC, PMA, PPA dues).
 
 ## 8. Pitfalls learned
 - **iOS Safari date and month inputs** have a native minimum width and centred text, so they overflow cards. The fix is at the end of the 2.1 block in styles.css (`appearance:none; min-width:0`). WebKit can't be installed here, so ask for a screenshot.
