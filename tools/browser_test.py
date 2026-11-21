@@ -43,7 +43,7 @@ with sync_playwright() as p:
         check(label+' news badge for existing user',pg.evaluate("n=>[...document.querySelectorAll('[data-badge=news]')].some(e=>!e.hidden&&e.textContent===String(n))",nlog-1))
         pg.screenshot(path=f'{OUT}/{label}-home.png')
         opts=pg.evaluate("[...document.querySelectorAll('#expenseCategory option')].map(o=>o.value)")
-        check(label+' 15 categories with Travel, Misc last',len(opts)==15 and 'Travel' in opts and 'Pets' in opts and opts[-1]=='Miscellaneous')
+        check(label+' 21 categories incl. new seven, Misc last',len(opts)==21 and all(c in opts for c in ['Travel','Rent & Housing','Subscriptions','Coffee & Snacks','Beauty & Grooming','Taxes & Government Fees','Professional Fees']) and 'Pets' in opts and opts[-1]=='Miscellaneous')
         check(label+' Travel in filter and budget',pg.evaluate("[...document.querySelectorAll('#categoryFilter option')].some(o=>o.value==='Travel') && [...document.querySelectorAll('#budgetCategoryFields label')].some(l=>l.textContent.includes('Travel'))"))
         check(label+' Ko-fi on Home and footer',pg.evaluate("!!document.querySelector('[data-view=home] .support-card a[href=\"https://ko-fi.com/isaymotion\"]') && !!document.querySelector('.support-line a[href=\"https://ko-fi.com/isaymotion\"]')"))
         # nav
@@ -261,7 +261,7 @@ with sync_playwright() as p:
         rl=pg.inner_text('#recurringList')
         check(label+' weekly and yearly listed',pg.locator('#recurringList .due-row').count()==3 and 'Every '+today.strftime('%A') in rl and 'Every ' in rl and ' 15' in rl)
         # budget: amber at 80%, and a per-day figure
-        pg.fill('#budgetCat4','2000'); pg.fill('#budgetCat3','5000'); pg.click('#budgetForm button[type=submit]')
+        pg.locator('#budgetCategoryFields .budget-field:has(label:text-is("💧 Utilities & Internet")) input').fill('2000'); pg.locator('#budgetCategoryFields .budget-field:has(label:text-is("🏡 Property & Real Estate")) input').fill('5000'); pg.click('#budgetForm button[type=submit]')
         pg.goto(URL+'#/'); pg.wait_for_timeout(200)
         bh=pg.inner_text('#budgetHome')
         check(label+' budget amber + per day',pg.locator('#budgetHome .budget-near').count()==1 and 'Getting close' in bh and 'a day for the' in bh)
