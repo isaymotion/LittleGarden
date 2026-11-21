@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const STORAGE_KEY = "little-garden-expenses-v1";
-  const KEYS = {views:"little-garden-saved-views",lastCategory:"little-garden-last-category",theme:"little-garden-theme",textSize:"little-garden-text-size",navCollapsed:"little-garden-nav-collapsed",seenNews:"little-garden-seen-news",importUndo:"little-garden-import-undo",lastBackup:"little-garden-last-backup",recovery:"little-garden-expenses-recovery",budgets:"little-garden-budgets",recurring:"little-garden-recurring",income:"little-garden-income-v1",lastMethod:"little-garden-last-method",backupSnooze:"little-garden-backup-snooze",payMe:"little-garden-pay-me-v1",methods:"little-garden-methods",trips:"little-garden-trips-v1"};
+  const KEYS = {views:"little-garden-saved-views",lastCategory:"little-garden-last-category",theme:"little-garden-theme",textSize:"little-garden-text-size",navCollapsed:"little-garden-nav-collapsed",seenNews:"little-garden-seen-news",importUndo:"little-garden-import-undo",lastBackup:"little-garden-last-backup",recovery:"little-garden-expenses-recovery",budgets:"little-garden-budgets",recurring:"little-garden-recurring",income:"little-garden-income-v1",lastMethod:"little-garden-last-method",backupSnooze:"little-garden-backup-snooze",payMe:"little-garden-pay-me-v1",methods:"little-garden-methods",trips:"little-garden-trips-v1",subs:"little-garden-subscriptions-v1",subsMigrated:"little-garden-subs-migrated"};
   const DEFAULT_METHODS = ["Cash","GCash","Card","Bank transfer","Other"];
   const NO_METHOD = "Not set";
   const methodColors = {"Cash":"#80a878","GCash":"#8099c5","Card":"#d98d8b","Bank transfer":"#e7b66c","Other":"#b7a2d3","Not set":"#a9b0a2"};
@@ -75,6 +75,7 @@
   let recurring = cleanRecurring(readJSON(KEYS.recurring));
   let income = cleanIncome(readJSON(KEYS.income));
   let trips = cleanTrips(readJSON(KEYS.trips));
+  let subs = cleanSubs(readJSON(KEYS.subs));
   let journalTrip = "";            // trip filter on the Transactions screen ("" = any)
   let categoryTouched = false, methodTouched = false, tripTouched = false;   // set when she picks one herself, so suggestions stop overriding it
   let itemLookup = new Map();
@@ -99,7 +100,7 @@
     if (!validDate(date)) throw new Error(`Row ${index+1}: invalid or missing date.`);
     if (!item || item.length>120) throw new Error(`Row ${index+1}: item must be 1–120 characters.`);
     if (!Number.isFinite(price) || price<=0 || price>999999999) throw new Error(`Row ${index+1}: price must be greater than zero and within the supported limit.`);
-    if (!categoryNames.includes(category)) throw new Error(`Row ${index+1}: unknown category "${category}". Use one of the 14 fixed categories.`);
+    if (!categoryNames.includes(category)) throw new Error(`Row ${index+1}: unknown category "${category}". Use one of the ${categoryNames.length} fixed categories.`);
     const notes = String(raw.notes ?? raw.Notes ?? "").trim();
     const now=new Date().toISOString(),created=isoStamp(raw.createdAt ?? raw.createdat)||now;
     const out={id:String(raw.id || makeId()).slice(0,80),date,item,price:Math.round(price*100)/100,category,method:cleanMethod(raw.method ?? raw.Method ?? raw["paid with"]),notes:notes.slice(0,500),createdAt:created,updatedAt:isoStamp(raw.updatedAt ?? raw.updatedat)||created};
@@ -160,7 +161,9 @@
     $("budgetCategoryFields").innerHTML=categories.map((c,i)=>`<div class="budget-field"><label for="budgetCat${i}">${c.icon} ${escapeHTML(c.name)}</label><div class="price-input"><span>₱</span><input id="budgetCat${i}" inputmode="decimal" max="999999999" min="0" placeholder="No limit" step="0.01" type="number"/></div></div>`).join("");
     { const lastCategory=lsGet(KEYS.lastCategory); if(categoryNames.includes(lastCategory)) $("expenseCategory").value=lastCategory; }
     $("calendarMonth").value=currentMonth();
+    const movedSubs=migrateRecurringSubs();
     bindEvents();
+    initSubs();
     initInsightControls();
     initPdfExportControls();
     $("viewAllTransactionsBtn").addEventListener("click",()=>go("transactions"));
@@ -169,6 +172,8 @@
     if(loadWarning) $("formMessage").textContent=loadWarning;
     initPayMe();
     initUpdates();
+    if(movedSubs)showUndoToast(`Moved ${movedSubs} ${movedSubs===1?"subscription":"subscriptions"} from Recurring to the new Subscriptions screen.`,false);
+    processAutoDebits();
   }
   function bindEvents(){
     $("expenseForm").addEventListener("submit",onSave);
@@ -243,7 +248,7 @@
     window.addEventListener("storage",event=>{
       if(event.key===STORAGE_KEY){expenses=loadExpenses();renderAll();}
       else if(event.key===KEYS.views){customViews=loadCustomViews();renderSavedViews();}
-      else if([KEYS.budgets,KEYS.recurring,KEYS.income,KEYS.methods,KEYS.trips].includes(event.key)){budgets=cleanBudgets(readJSON(KEYS.budgets));recurring=cleanRecurring(readJSON(KEYS.recurring));income=cleanIncome(readJSON(KEYS.income));METHODS=cleanMethods(readJSON(KEYS.methods));trips=cleanTrips(readJSON(KEYS.trips));renderAll();}
+      else if([KEYS.budgets,KEYS.recurring,KEYS.income,KEYS.methods,KEYS.trips,KEYS.subs].includes(event.key)){subs=cleanSubs(readJSON(KEYS.subs));budgets=cleanBudgets(readJSON(KEYS.budgets));recurring=cleanRecurring(readJSON(KEYS.recurring));income=cleanIncome(readJSON(KEYS.income));METHODS=cleanMethods(readJSON(KEYS.methods));trips=cleanTrips(readJSON(KEYS.trips));renderAll();}
     });
   }
   function setReportMonth(value){
@@ -332,16 +337,22 @@
   }
   function undoDelete(){
     if(!undoEntry)return;
-    if(undoEntry.addedId){   // undo of a quick add or a repeat
-      const previous=expenses;expenses=expenses.filter(e=>e.id!==undoEntry.addedId);
+    if(undoEntry.addedIds){   // undo of auto-debit payments (version 2.6)
+      const ids=new Set(undoEntry.addedIds),previous=expenses;expenses=expenses.filter(e=>!ids.has(e.id));
       if(saveExpenses()){renderAll();$("undoToast").hidden=true;if(undoTimer)clearTimeout(undoTimer);undoTimer=null;}else expenses=previous;
+      undoEntry=null;return;
+    }
+    if(undoEntry.addedId){   // undo of a quick add, a repeat or a subscription renewal
+      const previous=expenses;expenses=expenses.filter(e=>e.id!==undoEntry.addedId);
+      const back=undoEntry.subRestore&&subById(undoEntry.subRestore.id);
+      if(saveExpenses()){if(back){back.next=undoEntry.subRestore.next;back.day=undoEntry.subRestore.day;saveSubs();}renderAll();$("undoToast").hidden=true;if(undoTimer)clearTimeout(undoTimer);undoTimer=null;}else expenses=previous;
       undoEntry=null;return;
     }
     if(expenses.some(e=>e.id===undoEntry.entry.id)){undoEntry=null;$("undoToast").hidden=true;return;}
     expenses.splice(Math.min(undoEntry.index,expenses.length),0,undoEntry.entry);
     if(saveExpenses()){renderAll();$("undoToast").hidden=true;if(undoTimer)clearTimeout(undoTimer);undoTimer=null;undoEntry=null;}
   }
-  function renderAll(){refreshYearOptions();renderSummary();renderReports();renderMonthFilter();renderExpenses();renderCalendar();renderComparison();renderSavedViews();renderInsights();renderRecentTransactions();renderBackupMeta();renderSuggestions();renderBudgetHome();renderDue();renderRecurringList();renderIncomeList();fillBudgetForm(false);renderHomeNotices();fillMethodSelects();renderMethodList();fillTripSelect();syncTripFields();renderTrips();renderTripHome();$("allCount").textContent=`${expenses.length} ${expenses.length===1?"entry":"entries"}`;}
+  function renderAll(){refreshYearOptions();renderSummary();renderReports();renderMonthFilter();renderExpenses();renderCalendar();renderComparison();renderSavedViews();renderInsights();renderRecentTransactions();renderBackupMeta();renderSuggestions();renderBudgetHome();renderDue();renderRecurringList();renderIncomeList();fillBudgetForm(false);renderHomeNotices();fillMethodSelects();renderMethodList();fillTripSelect();syncTripFields();renderTrips();renderTripHome();renderSubs();renderSubsHome();$("allCount").textContent=`${expenses.length} ${expenses.length===1?"entry":"entries"}`;}
   function renderRecentTransactions(){
     const host=$("recentTransactions"); if(!host)return; host.innerHTML="";
     const rows=[...expenses].sort((a,b)=>b.date.localeCompare(a.date)||String(b.createdAt||"").localeCompare(String(a.createdAt||""))).slice(0,5);
@@ -900,6 +911,7 @@
     if("income" in snap)income=cleanIncome(snap.income);
     if("methods" in snap)METHODS=cleanMethods(snap.methods);
     if("trips" in snap)trips=cleanTrips(snap.trips);
+    if("subscriptions" in snap)subs=cleanSubs(snap.subscriptions);
     saveExtras();
     lsDel(KEYS.importUndo);renderAll();renderUndoImport();
     message.textContent="Import undone. Your earlier records are back.";message.style.color="var(--deep)";
@@ -952,10 +964,10 @@
       return {id,date:r.date,source,amount};
     }).filter(Boolean).slice(0,20000);
   }
-  const snapshotExtras = () => ({savedViews:customViews,budgets,recurring,income,methods:METHODS,trips});
+  const snapshotExtras = () => ({savedViews:customViews,budgets,recurring,income,methods:METHODS,trips,subscriptions:subs});
   const incomeSum = test => Math.round(income.filter(test).reduce((n,r)=>n+Math.round(r.amount*100),0))/100;
   function saveExtras(){
-    return [lsSet(KEYS.views,JSON.stringify(customViews)),lsSet(KEYS.budgets,JSON.stringify(budgets)),lsSet(KEYS.recurring,JSON.stringify(recurring)),lsSet(KEYS.income,JSON.stringify(income)),lsSet(KEYS.methods,JSON.stringify(METHODS)),lsSet(KEYS.trips,JSON.stringify(trips))].every(Boolean);
+    return [lsSet(KEYS.views,JSON.stringify(customViews)),lsSet(KEYS.budgets,JSON.stringify(budgets)),lsSet(KEYS.recurring,JSON.stringify(recurring)),lsSet(KEYS.income,JSON.stringify(income)),lsSet(KEYS.methods,JSON.stringify(METHODS)),lsSet(KEYS.trips,JSON.stringify(trips)),lsSet(KEYS.subs,JSON.stringify(subs))].every(Boolean);
   }
   // A backup made before version 2.1 has no budget, recurring or income section: whatever is missing from the file is left as it is.
   function applyImportedExtras(file,merge){
@@ -972,6 +984,7 @@
     if(Array.isArray(file.income))income=cleanIncome(byId(income,cleanIncome(file.income)));
     if(Array.isArray(file.methods)){const theirs=cleanMethods(file.methods);METHODS=merge?cleanMethods([...METHODS,...theirs]):theirs;}
     if(Array.isArray(file.trips))trips=cleanTrips(byId(trips,cleanTrips(file.trips)));
+    if(Array.isArray(file.subscriptions))subs=cleanSubs(byId(subs,cleanSubs(file.subscriptions)));
     saveExtras();
   }
 
@@ -1158,7 +1171,7 @@
     select.value=v;
   }
   function fillMethodSelects(){
-    ["expenseMethod","recurringMethod"].forEach(id=>{
+    ["expenseMethod","recurringMethod","subMethod"].forEach(id=>{
       const select=$(id),keep=select.value;
       if(select.options.length&&[...select.options].map(o=>o.value).join("\u0001")===["",...METHODS].join("\u0001"))return;
       select.innerHTML="";select.add(new Option(NO_METHOD,""));METHODS.forEach(m=>select.add(new Option(m,m)));
@@ -1302,6 +1315,206 @@
     const st=tripStats(t),dayNo=Math.round((new Date(today+"T00:00:00")-new Date(t.start+"T00:00:00"))/86400000)+1;
     box.className="panel trip-home";
     box.innerHTML=`<div><p class="eyebrow">ON A TRIP · DAY ${dayNo} OF ${st.days}</p><h2 class="trip-home__title">${escapeHTML(t.name)}</h2><p class="chart-subtitle">${money(st.total)} so far${t.currency!=="PHP"&&st.typed?` · ${escapeHTML(fxMoney(st.typed,t.currency))}`:""} · ${money(st.total/dayNo)} a day</p></div><a class="button button-outline" href="#/trips">Trip details</a>`;
+  }
+
+  /* =====================================================================================
+     Version 2.6: Subscriptions (KEYS.subs). Each has the date it next renews or expires (`next`),
+     a cycle (monthly | yearly) and `auto` (auto-debit). Auto-debit ones are recorded by themselves
+     on the day (processAutoDebits, on start and whenever the app comes back into view) and move
+     forward a cycle. The others wait on Home for Renewed or Let it end. `day` keeps the original
+     day of the month, so a plan on the 31st stays at month end instead of drifting to the 28th.
+     Payments are ordinary expenses in the Subscriptions category; nothing links them back.
+     ===================================================================================== */
+  function cleanSubs(v){   // runs on the first lines of the app: no consts from further down
+    if(!Array.isArray(v))return [];
+    const seen=new Set();
+    return v.map(r=>{
+      if(!r||typeof r!=="object")return null;
+      const name=String(r.name||"").trim().slice(0,60),price=cleanAmount(r.price);
+      if(!name||!price||!validDate(r.next))return null;
+      let day=Math.round(Number(r.day));if(!(day>=1&&day<=31))day=Number(r.next.slice(8,10));
+      const remind=[-1,0,1,3,7].includes(Number(r.remind))?Number(r.remind):3;
+      let id=String(r.id||makeId()).slice(0,80);if(seen.has(id))id=makeId();seen.add(id);
+      const out={id,name,price,cycle:r.cycle==="yearly"?"yearly":"monthly",next:r.next,day,auto:r.auto!==false,remind,method:cleanMethod(r.method),notes:String(r.notes||"").trim().slice(0,200),status:r.status==="ended"?"ended":"active"};
+      if(out.status==="ended"&&validDate(r.endedOn))out.endedOn=r.endedOn;
+      return out;
+    }).filter(Boolean).slice(0,200);
+  }
+  const SUB_CATEGORY = "Subscriptions";
+  const saveSubs = () => lsSet(KEYS.subs,JSON.stringify(subs));
+  const subById = id => subs.find(s=>s.id===id);
+  const daysUntil = date => Math.round((new Date(date+"T00:00:00")-new Date(localDate()+"T00:00:00"))/86400000);
+  const subDate = date => date.slice(0,4)===localDate().slice(0,4)?shortDate(date):new Date(date+"T00:00:00").toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"});
+  function addCycle(date,cycle,day){
+    const [y,m]=date.split("-").map(Number),t=new Date(y,m-1+(cycle==="yearly"?12:1),1),last=new Date(t.getFullYear(),t.getMonth()+1,0).getDate();
+    return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(Math.min(day,last)).padStart(2,"0")}`;
+  }
+  // Active ones inside their reminder window, plus by-hand ones past their date that were neither renewed nor ended.
+  function subsSoon(){
+    return subs.filter(s=>{if(s.status!=="active")return false;const d=daysUntil(s.next);return (!s.auto&&d<0)||(s.remind>=0&&d>=0&&d<=s.remind);}).sort((a,b)=>a.next.localeCompare(b.next));
+  }
+  function subStatus(s){
+    if(s.status==="ended")return s.endedOn?`Ended ${subDate(s.endedOn)}`:"Ended";
+    const d=daysUntil(s.next),word=s.auto?"Renews":"Expires";
+    if(d<0)return `Expired ${subDate(s.next)} · not renewed yet`;
+    if(d===0)return `${word} today`;
+    if(d===1)return `${word} tomorrow`;
+    return `${word} ${subDate(s.next)}${d<=60?` (in ${d} days)`:""}`;
+  }
+  const remindText = s => s.remind<0?"No reminder":s.remind===0?"Reminder on the day":`Reminder ${s.remind} ${s.remind===1?"day":"days"} before`;
+  function processAutoDebits(){
+    const today=localDate(),added=[],before=subs.map(s=>({...s}));
+    subs.forEach(s=>{
+      for(let n=0;s.status==="active"&&s.auto&&s.next<=today&&n<36;n++){
+        try{added.push(normalizeExpense({date:s.next,item:s.name,price:s.price,category:SUB_CATEGORY,method:s.method,notes:"Auto-debit"}));}catch(e){break;}
+        s.next=addCycle(s.next,s.cycle,s.day);
+      }
+    });
+    if(!added.length)return;
+    const previous=expenses;expenses=[...expenses,...added];
+    if(!saveExpenses()||!saveSubs()){expenses=previous;subs=before;saveExpenses();saveSubs();return;}
+    renderAll();
+    undoEntry={addedIds:added.map(e=>e.id)};   // Undo removes the payments; the dates stay moved on, so they are not added again
+    const one=added[0];
+    showUndoToast(added.length===1?`Auto-debit: added “${one.item}”, ${money(one.price)}, for ${shortDate(one.date)}.`:`Auto-debit: added ${added.length} subscription payments (${money(sum(added))}).`);
+  }
+  function renewSub(id){
+    const s=subById(id);if(!s||s.status!=="active")return;
+    const today=localDate();
+    let entry;try{entry=normalizeExpense({date:today,item:s.name,price:s.price,category:SUB_CATEGORY,method:s.method,notes:"Renewed"});}catch(e){return;}
+    const previous=expenses;expenses=[...expenses,entry];
+    if(!saveExpenses()){expenses=previous;return;}
+    const restore={id:s.id,next:s.next,day:s.day};
+    if(s.next<today)s.day=Number(today.slice(8,10));   // renewed after it lapsed: the new period starts today
+    s.next=addCycle(s.next<today?today:s.next,s.cycle,s.day);saveSubs();renderAll();
+    undoEntry={addedId:entry.id,subRestore:restore};
+    showUndoToast(`Renewed “${s.name}”: ${money(s.price)} added. Next ${s.auto?"renewal":"expiry"} ${subDate(s.next)}.`);
+  }
+  function endSub(id){
+    const s=subById(id);if(!s)return;
+    if(!confirm(`Mark “${s.name}” as ended? Little Garden stops reminding you${s.auto?" and stops adding its payments":""}. Payments already recorded stay.`))return;
+    s.status="ended";s.endedOn=localDate();saveSubs();renderAll();
+    showUndoToast(`“${s.name}” ended. You can restart it from Subscriptions.`,false);
+  }
+  function removeSub(id){
+    const s=subById(id);if(!s)return;
+    if(!confirm(`Remove “${s.name}” from Subscriptions? Payments already recorded stay in your expenses.`))return;
+    subs=subs.filter(x=>x.id!==id);saveSubs();if($("subId").value===id)resetSubForm();renderAll();
+  }
+  function syncSubFields(){
+    const auto=$("subAuto").checked;
+    $("subNextLabel").textContent=auto?"Next renewal date":"Expiry date";
+    $("subAutoHint").textContent=auto?"On the renewal date the payment is added to your expenses by itself, and the date moves on a month or a year. You can undo it.":"Not paid automatically. Little Garden reminds you before it expires; tap Renewed when you pay, or Let it end.";
+  }
+  function resetSubForm(){
+    $("subForm").reset();$("subId").value="";$("subNext").min=localDate();$("subRemind").value="3";$("subAuto").checked=true;
+    $("subSaveBtn").textContent="Add subscription";$("subCancelBtn").classList.add("hidden");syncSubFields();
+  }
+  function saveSub(event){
+    event.preventDefault();
+    const id=$("subId").value,msg=$("subMessage"),next=$("subNext").value,old=id?subById(id):null;
+    if(!validDate(next)){msg.textContent="Pick the date it next renews or expires.";return;}
+    if(next<localDate()&&!(old&&old.next===next)){msg.textContent="Pick today or a later date: the next time it renews or expires.";return;}
+    const list=cleanSubs([{id:id||makeId(),name:$("subName").value,price:$("subPrice").value,cycle:$("subCycle").value,next,day:old&&old.next===next?old.day:Number(next.slice(8,10)),auto:$("subAuto").checked,remind:$("subRemind").value,method:$("subMethod").value,notes:$("subNotes").value,status:"active"}]);
+    if(!list.length){msg.textContent="Check the name and the price.";return;}
+    const previous=subs;
+    subs=old?subs.map(s=>s.id===id?list[0]:s):[...subs,list[0]].slice(-200);
+    if(!saveSubs()){subs=previous;msg.textContent="Could not save in browser storage.";return;}
+    resetSubForm();renderAll();
+    const s=list[0];
+    msg.textContent=`“${s.name}” ${old?(old.status==="ended"?"restarted":"updated"):"added"}. ${s.auto?`It will be recorded by itself on ${subDate(s.next)}.`:`Expires ${subDate(s.next)}.`}`;
+    processAutoDebits();   // a plan that renews today is recorded straight away
+  }
+  function editSub(s){
+    $("subId").value=s.id;$("subName").value=s.name;$("subPrice").value=s.price;$("subCycle").value=s.cycle;
+    $("subNext").min=s.next<localDate()?s.next:localDate();$("subNext").value=s.status==="ended"?"":s.next;
+    if(s.status==="ended")$("subNext").min=localDate();
+    $("subRemind").value=String(s.remind);$("subAuto").checked=s.auto;$("subNotes").value=s.notes;
+    $("subMethod").value=s.method;if(s.method&&$("subMethod").value!==s.method){$("subMethod").add(new Option(s.method,s.method));$("subMethod").value=s.method;}
+    $("subSaveBtn").textContent=s.status==="ended"?"Restart subscription":"Save changes";$("subCancelBtn").classList.remove("hidden");
+    $("subMessage").textContent=s.status==="ended"?"Pick the date it next renews or expires, then tap Restart.":"";syncSubFields();
+    $("subForm").scrollIntoView({block:"start"});$("subName").focus({preventScroll:true});
+  }
+  // A calendar file for the phone's own Calendar app, which can notify her even while Little Garden is closed.
+  function subCalendarFile(id){
+    const s=subById(id);if(!s)return;
+    const esc=t=>String(t).replace(/\\/g,"\\\\").replace(/;/g,"\;").replace(/,/g,"\\,").replace(/\r?\n/g,"\\n");
+    const stamp=new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");
+    let rule="";
+    if(s.auto)rule=s.cycle==="yearly"?"RRULE:FREQ=YEARLY":s.day<=28?`RRULE:FREQ=MONTHLY;BYMONTHDAY=${s.day}`:`RRULE:FREQ=MONTHLY;BYMONTHDAY=${[28,29,30,31].filter(x=>x<=s.day).join(",")};BYSETPOS=-1`;
+    const before=Math.max(0,s.remind),alarm=(trigger,text)=>["BEGIN:VALARM","ACTION:DISPLAY",`DESCRIPTION:${esc(text)}`,`TRIGGER:${trigger}`,"END:VALARM"];
+    const title=s.auto?`${s.name} renews (${money(s.price)})`:`${s.name} expires`;
+    const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//isaymotion//Little Garden//EN","CALSCALE:GREGORIAN","BEGIN:VEVENT",
+      `UID:${s.id}-${s.next}@little-garden`,`DTSTAMP:${stamp}`,`DTSTART:${s.next.replace(/-/g,"")}T090000`,"DURATION:PT30M",...(rule?[rule]:[]),
+      `SUMMARY:${esc(title)}`,`DESCRIPTION:${esc(`${s.auto?"Auto-debit":"Renew it to keep it"}: ${money(s.price)} a ${s.cycle==="yearly"?"year":"month"}${s.method?`, paid with ${s.method}`:""}. From Little Garden.`)}`,
+      ...(before>0?alarm(`-P${before}D`,`${s.name} ${s.auto?"renews":"expires"} in ${before} ${before===1?"day":"days"}`):[]),...alarm("PT0S",title),"END:VEVENT","END:VCALENDAR"];
+    downloadFile(`${s.name.replace(/[^\w-]+/g,"-").replace(/^-+|-+$/g,"").toLowerCase()||"subscription"}-reminder.ics`,lines.join("\r\n")+"\r\n","text/calendar;charset=utf-8");
+  }
+  function subCard(s){
+    const soon=s.status==="active"&&subsSoon().includes(s),card=document.createElement("article");card.className="trip-card sub-card";card.dataset.sub=s.id;
+    const acts=s.status==="ended"?'<button class="button button-outline" type="button" data-sub-act="edit">Restart</button><button class="button button-quiet" type="button" data-sub-act="remove">Remove</button>'
+      :`${s.auto?"":'<button class="button button-primary" type="button" data-sub-act="renew">Renewed</button>'}<button class="button button-outline" type="button" data-sub-act="calendar">Add to Calendar</button><button class="button button-outline" type="button" data-sub-act="edit">Edit</button><button class="button button-quiet" type="button" data-sub-act="end">Let it end</button><button class="button button-quiet" type="button" data-sub-act="remove">Remove</button>`;
+    card.innerHTML=`<header class="trip-card__head"><div><h3>${escapeHTML(s.name)}</h3><p><span class="trip-state${soon?" is-now":""}">${escapeHTML(subStatus(s))}</span></p></div><strong class="trip-card__total">${money(s.price)}<small> / ${s.cycle==="yearly"?"year":"month"}</small></strong></header>
+      <p class="trip-card__meta">${s.auto?"Auto-debit":"Paid by hand"} · ${escapeHTML(s.method||"No payment method")}${s.status==="active"?` · ${escapeHTML(remindText(s))}`:""}</p>${s.notes?`<p class="trip-card__meta">${escapeHTML(s.notes)}</p>`:""}
+      <div class="trip-actions">${acts}</div>`;
+    return card;
+  }
+  function renderSubs(){
+    const host=$("subList");if(!host)return;
+    const active=subs.filter(s=>s.status==="active").sort((a,b)=>a.next.localeCompare(b.next)),ended=subs.filter(s=>s.status==="ended").sort((a,b)=>(b.endedOn||"").localeCompare(a.endedOn||""));
+    const monthly=Math.round(active.reduce((n,s)=>n+(s.cycle==="yearly"?s.price/12:s.price)*100,0))/100;
+    $("subsTotal").textContent=active.length?`About ${money(monthly)} a month, ${money(monthly*12)} a year, for ${active.length} active ${active.length===1?"subscription":"subscriptions"}.`:"";
+    host.innerHTML="";
+    if(!active.length)host.innerHTML='<div class="empty-state"><span aria-hidden="true">📺</span><h3>No subscriptions yet</h3><p>Add one above, with the date it next renews or expires.</p></div>';
+    active.forEach(s=>host.appendChild(subCard(s)));
+    $("subEndedWrap").classList.toggle("hidden",!ended.length);$("subEndedList").innerHTML="";ended.forEach(s=>$("subEndedList").appendChild(subCard(s)));
+  }
+  function onSubListClick(event){
+    const button=event.target.closest("button[data-sub-act]");if(!button)return;
+    const id=button.closest("[data-sub]").dataset.sub,s=subById(id),act=button.dataset.subAct;if(!s)return;
+    if(act==="renew")renewSub(id);else if(act==="end")endSub(id);else if(act==="remove")removeSub(id);
+    else if(act==="calendar")subCalendarFile(id);else if(act==="edit")editSub(s);
+  }
+  function renderSubsHome(){
+    const panel=$("subsHome");if(!panel)return;
+    const soon=subsSoon(),list=$("subsHomeList");panel.classList.toggle("hidden",!soon.length);list.innerHTML="";
+    soon.forEach(s=>{
+      const row=document.createElement("div");row.className="recent-transaction due-row";row.dataset.sub=s.id;
+      row.innerHTML=`<span class="recent-category-icon" aria-hidden="true">📺</span><span class="recent-main"><strong>${escapeHTML(s.name)}</strong><small>${escapeHTML(subStatus(s))}${s.auto?" · auto-debit, added on the day":""}</small></span><strong class="recent-amount">${money(s.price)}</strong><span class="due-actions">${s.auto?"":`<button class="button button-primary" type="button" data-sub-act="renew" aria-label="Renewed ${escapeHTML(s.name)}">Renewed</button>`}<button class="button button-quiet" type="button" data-sub-act="end" aria-label="Let ${escapeHTML(s.name)} end">Let it end</button></span>`;
+      list.appendChild(row);
+    });
+    updateBadges();
+  }
+  // Once, when 2.6 first opens: monthly and yearly recurring expenses in the Subscriptions category move here.
+  // They were added by tap, so they come over as paid by hand (not auto-debit); she can switch each one.
+  function migrateRecurringSubs(){
+    if(lsGet(KEYS.subsMigrated))return 0;
+    const moving=recurring.filter(r=>r.category===SUB_CATEGORY&&(r.freq==="monthly"||r.freq==="yearly")),today=localDate();
+    const made=moving.map(r=>{
+      const p=duePeriod(r);let next;
+      if(p&&r.done!==p.key)next=p.date;                       // this period's payment is still to record
+      else{
+        const now=new Date(),y=now.getFullYear(),m=r.freq==="yearly"?r.month:now.getMonth()+1,last=new Date(y,m,0).getDate();
+        next=`${y}-${String(m).padStart(2,"0")}-${String(Math.min(r.day,last)).padStart(2,"0")}`;
+        if(p||next<today)next=addCycle(next,r.freq,r.day);
+      }
+      return {id:makeId(),name:r.item,price:r.price,cycle:r.freq,next,day:r.day,auto:false,remind:3,method:r.method,status:"active"};
+    });
+    const nextSubs=[...subs,...cleanSubs(made)],ids=new Set(moving.map(r=>r.id)),nextRecurring=recurring.filter(r=>!ids.has(r.id));
+    if(made.length){
+      if(!lsSet(KEYS.subs,JSON.stringify(nextSubs)))return 0;
+      subs=nextSubs;recurring=nextRecurring;saveRecurring();
+    }
+    lsSet(KEYS.subsMigrated,new Date().toISOString());
+    return made.length;
+  }
+  function initSubs(){
+    $("subForm").addEventListener("submit",saveSub);
+    $("subCancelBtn").addEventListener("click",()=>{resetSubForm();$("subMessage").textContent="";});
+    $("subAuto").addEventListener("change",syncSubFields);
+    ["subList","subEndedList","subsHomeList"].forEach(id=>$(id).addEventListener("click",onSubListClick));
+    document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){processAutoDebits();renderSubsHome();}});
+    resetSubForm();
   }
 
   /* =====================================================================================
@@ -1640,6 +1853,7 @@
     calendar:{title:"Calendar",label:"Calendar",icon:"calendar",group:"Your spending"},
     budget:{title:"Budget and income",label:"Budget and income",icon:"wallet",group:"Your spending"},
     trips:{title:"Trips",label:"Trips",icon:"plane",group:"Your spending"},
+    subscriptions:{title:"Subscriptions",label:"Subscriptions",icon:"repeat",group:"Your spending",badge:"subs"},
     tools:{title:"Tools and backup",label:"Tools and backup",icon:"tools",group:"Your data"},
     "whats-new":{title:"What’s new",label:"What’s new",icon:"news",group:"App",badge:"news"},
     about:{title:"About",label:"About",icon:"info",group:"App"}
@@ -1655,6 +1869,7 @@
     news:'<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h6M9 16h6"/>',
     qr:'<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 20h.01M20 14v.01"/>',
     info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
+    repeat:'<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
     plane:'<path d="M21 3L3 10.5l7 2.5 2.5 7z"/><path d="M10 13l11-10"/>',
     external:'<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'
   };
@@ -1836,6 +2051,8 @@
   function updateBadges(){
     const n=unseenNews().length;
     document.querySelectorAll('[data-badge="news"]').forEach(el=>{el.textContent=String(n);el.hidden=!n;});
+    const due=subsSoon().length;
+    document.querySelectorAll('[data-badge="subs"]').forEach(el=>{el.textContent=String(due);el.hidden=!due;});
   }
   const NEWS_TYPES = {feature:"New",update:"Improved",correction:"Fixed"};
   function renderNews(){
@@ -1885,6 +2102,7 @@
     if(name==="budget")fillBudgetForm(true);
     if(name==="pay-me")renderPayMe();
     if(name==="trips")renderTrips();
+    if(name==="subscriptions")renderSubs();
     document.body.dataset.route=name;
     if(name!=="home"&&isPhone()&&!$("expenseId").value&&!$("expenseItem").value.trim()&&!$("expensePrice").value&&expenses.length)setEntryOpen(false);
     document.querySelectorAll(".page-view").forEach(view=>{const on=view.dataset.view===name;view.hidden=!on;view.classList.toggle("is-active",on);});

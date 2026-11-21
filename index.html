@@ -129,6 +129,9 @@
 </section><section aria-labelledby="dueTitle" class="panel due-panel hidden" id="duePanel">
 <div class="section-heading"><div><p class="eyebrow">REGULAR WATERING</p><h2 id="dueTitle">Recurring, due now</h2><p class="chart-subtitle">Tap Add when you have paid one. It is recorded on its usual day.</p></div></div>
 <div class="recent-transaction-list" id="dueList"></div>
+</section><section aria-labelledby="subsHomeTitle" class="panel due-panel subs-home hidden" id="subsHome">
+<div class="section-heading"><div><p class="eyebrow">COMING UP</p><h2 id="subsHomeTitle">Renewing or expiring soon</h2></div><a class="button button-outline" href="#/subscriptions">Subscriptions</a></div>
+<div class="recent-transaction-list" id="subsHomeList"></div>
 </section><section aria-labelledby="recentTitle" class="panel recent-panel">
 <div class="section-heading"><div><p class="eyebrow">JUST ADDED TO YOUR GARDEN</p><h2 id="recentTitle">Recent transactions</h2><p class="chart-subtitle">A quick look at your latest entries.</p></div><button class="button button-outline" id="viewAllTransactionsBtn" type="button">View all</button></div>
 <div class="recent-transaction-list" id="recentTransactions"><div class="recent-empty">Your recent expenses will appear here.</div></div>
@@ -351,6 +354,25 @@
 <p aria-live="polite" class="form-message mini-wide" id="tripMessage" role="status"></p>
 </form>
 <div class="trip-list" id="tripList"></div>
+</section></div>
+<div class="page-view" data-view="subscriptions" hidden="" id="subsView"><section aria-labelledby="subsTitle" class="panel">
+<div class="section-heading"><div><p class="eyebrow">EVERY SEASON</p><h2 id="subsTitle">Subscriptions</h2><p class="chart-subtitle">Streaming, apps, memberships and plans. Set the date each one renews or expires and Little Garden reminds you before it does. Each payment is recorded under 📺 Subscriptions.</p></div><span aria-hidden="true" class="leaf-badge">↻</span></div>
+<p class="subs-total" id="subsTotal"></p>
+<form class="mini-form" id="subForm">
+<input id="subId" type="hidden"/>
+<div class="mini-field mini-wide"><label for="subName">Name</label><input autocomplete="off" id="subName" maxlength="60" placeholder="e.g. Netflix, Spotify, iCloud+" required="" type="text"/></div>
+<div class="mini-field"><label for="subPrice">Price (PHP)</label><div class="price-input"><span>₱</span><input id="subPrice" inputmode="decimal" max="999999999" min="0.01" placeholder="0.00" required="" step="0.01" type="number"/></div></div>
+<div class="mini-field"><label for="subCycle">Paid</label><select id="subCycle"><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></div>
+<div class="mini-field"><label for="subNext" id="subNextLabel">Next renewal date</label><input id="subNext" required="" type="date"/></div>
+<div class="mini-field"><label for="subMethod">Paid with</label><select id="subMethod"></select></div>
+<div class="mini-field"><label for="subRemind">Remind me</label><select id="subRemind"><option value="-1">No reminder</option><option value="0">On the day</option><option value="1">1 day before</option><option value="3" selected="">3 days before</option><option value="7">7 days before</option></select></div>
+<div class="mini-field mini-wide"><label class="pdf-check sub-auto"><input id="subAuto" type="checkbox" checked=""/> <span><strong>Auto-debit</strong> (renews by itself)</span></label><p class="chart-subtitle" id="subAutoHint"></p></div>
+<div class="mini-field mini-wide"><label for="subNotes">Notes (optional)</label><input autocomplete="off" id="subNotes" maxlength="200" placeholder="e.g. Family plan, shared with Mama" type="text"/></div>
+<div class="form-actions mini-wide"><button class="button button-primary" id="subSaveBtn" type="submit">Add subscription</button><button class="button button-quiet hidden" id="subCancelBtn" type="button">Cancel</button></div>
+<p aria-live="polite" class="form-message mini-wide" id="subMessage" role="status"></p>
+</form>
+<div class="trip-list" id="subList"></div>
+<div class="hidden" id="subEndedWrap"><h3 class="subs-ended-title">Ended</h3><div class="trip-list" id="subEndedList"></div></div>
 </section></div>
 <div class="page-view" data-view="pay-me" hidden="" id="payMeView"><section aria-labelledby="payMeTitle" class="panel pay-panel">
 <div class="section-heading"><div><p class="eyebrow">SHARE THE HARVEST</p><h2 id="payMeTitle">Pay me</h2><p class="chart-subtitle">Your GCash, Maya and bank QR codes, ready to show or send when someone pays you back. Saved only on this device, and included in your JSON backup.</p></div><span aria-hidden="true" class="leaf-badge">❀</span></div>

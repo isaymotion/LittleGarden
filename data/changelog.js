@@ -5,6 +5,15 @@
    and "Latest version" in the footer of index.html. */
 window.APP_CHANGELOG = [
   {
+    version: '2.6.0', date: '2026-11-22', title: 'Subscriptions',
+    items: [
+      { type: 'feature', text: 'A new Subscriptions screen in the menu. Each subscription has its price, monthly or yearly, the date it renews or expires, how it is paid, notes, and a reminder 1, 3 or 7 days ahead (or on the day). The top shows what they cost you a month and a year.', href: '#/subscriptions' },
+      { type: 'feature', text: 'Auto-debit: turn it on and, on the renewal date, the payment is added to your expenses by itself and the date moves on a month or a year, with an Undo button. With it off, tap Renewed when you pay, or Let it end.', href: '#/subscriptions' },
+      { type: 'feature', text: 'Reminders: subscriptions renewing or expiring soon show on Home, with a count beside Subscriptions in the menu. Add to Calendar saves the date to your phone’s Calendar, so it can notify you even when Little Garden is closed.' },
+      { type: 'update', text: 'Monthly and yearly recurring expenses in the Subscriptions category moved to the new screen, set as paid by hand. Edit one to turn on auto-debit.' }
+    ]
+  },
+  {
     version: '2.5.0', date: '2026-11-21', title: 'Seven new categories',
     items: [
       { type: 'feature', text: 'Seven new categories: ✈️ Travel and 🏠 Rent & Housing (Property & transport), ☕ Coffee & Snacks and 📺 Subscriptions (Daily living), 💇 Beauty & Grooming (Health & care), 🩺 Professional Fees and 🏛️ Taxes & Government Fees (Lifestyle & other). They appear in the entry form, filters, charts, budgets and recurring expenses. Expenses you already saved keep their category; tap Edit to move one.' }
