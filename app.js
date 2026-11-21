@@ -1861,6 +1861,7 @@
         <li>Start typing a description you have used before and pick it from the list. The category fills in for you.</li>
         <li>To install on iPhone or iPad, open this page in Safari, tap Share, then Add to Home Screen.</li>
       </ul>
+      <section class="panel support-card" aria-labelledby="supportTitleAbout"><h2 id="supportTitleAbout">Enjoying Little Garden?</h2><p>It is free, with no ads and no tracking. If it helps you, you can buy me a coffee.</p><p><a class="btn" href="https://ko-fi.com/isaymotion" target="_blank" rel="noopener">♥ Support on Ko-fi</a></p></section>
       <p class="about-text about-credit">App created by Isabella Navarro, MD. Latest version November 2026. <a href="mailto:isaymotion@gmail.com">isaymotion@gmail.com</a></p>
     </section>`;
   }
