@@ -107,12 +107,13 @@ Screenshots go to `/tmp/lg-shots` (phone-*.png, desktop-*.png, phone-dark-*.png)
 - Known limits she was told about, if she asks: income is not in the category trend chart (it has its own chart); custom payment methods get an automatic colour.
 - Pay me ideas not built (offer only if she asks): more accounts, reordering, auto-cropping the QR from a full screenshot.
 - Other apps menu group: `SHOW_OTHER_APPS` is false in `data/app-meta.js`, as in her other apps. Turn it on only when she interlinks them all.
-- The next version is 2.4.3 for a fix or 2.5.0 for a feature (check `data/app-meta.js` on `main` first, in case another chat released since).
+- The next version is 2.5.1 for a fix or 2.6.0 for a feature (2.5.0 if PR #7 was never merged) (check `data/app-meta.js` on `main` first, in case another chat released since).
 - Ko-fi checks were added to the browser test in 2.5.0.
 - Category ideas offered to her on 2026-11-21, none built (build only the ones she picks): Rent/Housing (could split from Property), Insurance, Personal loans/debt payments, Savings & investments (not really spending), Family support/padala, Subscriptions, Kids/Family, Fitness & sports, Coffee & snacks, Beauty & grooming (split from Shopping & Personal Care), Taxes & government fees, Work expenses/professional fees (PRC, PMA, PPA dues).
 
 ## 8. Pitfalls learned
 - **iOS Safari date and month inputs** have a native minimum width and centred text, so they overflow cards. The fix is at the end of the 2.1 block in styles.css (`appearance:none; min-width:0`). WebKit can't be installed here, so ask for a screenshot.
+- Pushing and `gh api` fail with 403 until the repo is attached with push access: call `add_repo` (owner isaymotion, repo LittleGarden, access push) first.
 - `gh pr create` fails (GraphQL is blocked). Use the REST calls in section 4. The Pages status API is also blocked, so you can't confirm a deploy; just tell her to wait.
 - In Playwright, click radio buttons inside `.seg` with `pg.check('input[...]')`, not by clicking the span (the transparent input covers it).
 - `data-view` names must match the `ROUTES` keys (`transactions`, `insights`), or the screen never shows.
