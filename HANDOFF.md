@@ -4,7 +4,7 @@
 - **What:** Little Garden, Dr. Isabella Navarro's personal monthly expense tracker in Philippine pesos (PHP). Private, offline, data only in the browser (localStorage + IndexedDB). Originally built by ChatGPT; rebuilt and extended by Claude from 2026-11-16.
 - **Repo:** `isaymotion/LittleGarden` (GitHub; the clone URL is lowercase `littlegarden`). Live from `main` on GitHub Pages: https://isaymotion.github.io/LittleGarden/
 - **Branches:** `main` = the site. `dev-tools` = this doc plus `tools/` (browser_test.py, update_test.py, README; never merged into main).
-- **Current version:** 2.5.0 (2026-11-21) = PR #7 (seven new categories), merged 2026-11-21. Open PRs: none. 2.4.0 = PR #6 (trips and more), merged 2026-11-17. 2.4.1 and 2.4.2 = Ko-fi support link and card, committed straight to `main` by another chat on 2026-11-21.
+- **Current version:** 2.6.0 (2026-11-22, Subscriptions) on branch `claude/subscriptions`, **PR #8 open, not merged** (merge call denied by the permission check; merge once she says "merge"). `main` is 2.5.0 = PR #7 (seven new categories), merged 2026-11-21. 2.4.0 = PR #6 (trips and more), merged 2026-11-17. 2.4.1 and 2.4.2 = Ko-fi support link and card, committed straight to `main` by another chat on 2026-11-21.
 
 ## 2. Fixed rules
 - Footer and About attribution, exact: `App created by Isabella Navarro, MD. Latest version November 2026. isaymotion@gmail.com` (email is a mailto link). Only the month ever changes.
@@ -28,15 +28,16 @@ styles.css            original styles, then appended blocks: "Version 2 shell", 
 app.js                one IIFE: data + rendering, "Version 2.1" features, "Version 2.4" block (phone form, repeat, methods, trips), "Version 2.3" Pay me + initUpdates, then the app shell (router, menu, theme...)
 data/app-meta.js      window.APP_META {name, short, tagline, version, repo}, APP_LINKS, SHOW_OTHER_APPS=false
 data/changelog.js     window.APP_CHANGELOG, newest first
+(app.js also has a "Version 2.6: Subscriptions" block just before the Pay me block; styles.css ends with a "Version 2.6" block)
 sw.js                 network-first cache, PREFIX "little-garden-"
 manifest.webmanifest  icons/icon-192.png + app-icon.png (512)
 icons/                icon-192, apple-touch-icon (180), favicon-32 (made from app-icon.png)
 README.md             features, upload list, release steps
 ```
-**Routes** (hash): `#/` home, `#/pay-me` (menu group Start), `#/transactions`, `#/insights`, `#/calendar`, `#/budget`, `#/trips`, `#/tools`, `#/whats-new`, `#/about`. Old `#journal` and `#reports` redirect. Adding a screen means a `page-view` in index.html plus an entry in `ROUTES` in app.js (label, icon, group); the menu builds itself. `route()` also sets `body[data-route]`.
+**Routes** (hash): `#/` home, `#/pay-me` (menu group Start), `#/transactions`, `#/insights`, `#/calendar`, `#/budget`, `#/trips`, `#/subscriptions` (2.6, badge "subs"), `#/tools`, `#/whats-new`, `#/about`. Old `#journal` and `#reports` redirect. Adding a screen means a `page-view` in index.html plus an entry in `ROUTES` in app.js (label, icon, group); the menu builds itself. `route()` also sets `body[data-route]`.
 
 **localStorage keys** (`KEYS` in app.js):
-- Data: `little-garden-expenses-v1`, `-saved-views`, `-budgets`, `-recurring`, `-income-v1`, `-methods` (2.4), `-trips-v1` (2.4).
+- Data: `little-garden-expenses-v1`, `-saved-views`, `-budgets`, `-recurring`, `-income-v1`, `-methods` (2.4), `-trips-v1` (2.4), `-subscriptions-v1` (2.6). Flag `-subs-migrated` (2.6) marks the one-time move from Recurring.
 - Settings: `-theme`, `-text-size`, `-nav-collapsed`, `-seen-news`, `-last-category`, `-last-method`.
 - Pay me details: `little-garden-pay-me-v1` = `{gcash:{name,number,note,updatedAt}}`. **Pictures are NOT in localStorage**: IndexedDB database `little-garden-pay-me`, store `qr`, key = account id, value = JPEG data URL (scaled to 1400 px). Reason: every isaymotion app shares one origin and its ~5 MB localStorage.
 - Housekeeping: `-last-backup`, `-backup-snooze`, `-import-undo`, `-expenses-recovery`.
@@ -48,9 +49,10 @@ Examples:
 - Budget: `{"overall":20000,"categories":{"Groceries":5000}}`
 - Recurring: `{"id","item":"Internet","price":1699,"category":"Utilities & Internet","method":"","freq":"monthly","day":31,"done":"2026-11"}`. `freq` = monthly | weekly (`weekday` 0-6, Sunday 0) | quarterly (`day`, `month` = any month it falls in) | yearly (`day`, `month`). `done` = the period already handled: `YYYY-MM`, or for weekly the Monday `YYYY-MM-DD` of that week. Data from before 2.4 has `doneMonth` and no `freq`; `cleanRecurring` reads it as monthly.
 - Income: `{"id","date":"2026-11-15","source":"Salary","amount":50000}`
+- Subscription (2.6): `{"id","name":"Netflix","price":549,"cycle":"monthly"|"yearly","next":"2026-12-01","day":1,"auto":true,"remind":-1|0|1|3|7,"method":"GCash","notes":"","status":"active"|"ended","endedOn"?}`. `next` = date it next renews (auto) or expires (by hand). `day` = anchor day of month so the 31st stays at month end (`addCycle`). Payments are plain expenses in category Subscriptions with notes "Auto-debit" or "Renewed"; no link back.
 - Changelog entry: `{version:'2.2.0', date:'2026-11-16', title:'…', items:[{type:'feature'|'update'|'correction', text:'…', href:'#/budget'}]}`. The type shows as New, Improved or Fixed.
 
-**JSON backup** = `{app, schemaVersion:1, appVersion, currency, exportedAt, categories, expenses, savedViews, budgets, recurring, income, methods, trips, payMe:{accounts:{id:{name,number,note,updatedAt,qr}}}}`. Built by `buildBackup()` (async, reads IndexedDB); `exportJSON` downloads it, `shareBackup` hands it to the share sheet. Import accepts older files: sections that are missing are left alone. On merge: methods are joined, trips merge by id. Pay me import: on merge, accounts already on the device win; on replace, accounts in the file overwrite and the rest are kept. Undo import covers methods and trips but not Pay me. CSV columns: `id,date,item,price,category,method,notes,createdAt,updatedAt,trip,foreignAmount,foreignCurrency` (`trip` holds the trip's **name**; on import it is matched to an existing trip, otherwise dropped).
+**JSON backup** = `{app, schemaVersion:1, appVersion, currency, exportedAt, categories, expenses, savedViews, budgets, recurring, income, methods, trips, subscriptions, payMe:{accounts:{id:{name,number,note,updatedAt,qr}}}}`. Built by `buildBackup()` (async, reads IndexedDB); `exportJSON` downloads it, `shareBackup` hands it to the share sheet. Import accepts older files: sections that are missing are left alone. On merge: methods are joined, trips and subscriptions merge by id. Pay me import: on merge, accounts already on the device win; on replace, accounts in the file overwrite and the rest are kept. Undo import covers methods and trips but not Pay me. CSV columns: `id,date,item,price,category,method,notes,createdAt,updatedAt,trip,foreignAmount,foreignCurrency` (`trip` holds the trip's **name**; on import it is matched to an existing trip, otherwise dropped).
 
 ## 4. Per-release recipe
 1. `git fetch --depth=5 origin main && git checkout -B claude/<topic> origin/main`. Always start from the latest `main`: other chats (cross-app rollouts such as Ko-fi) commit to it directly, and the version may have moved on.
@@ -70,7 +72,7 @@ git -C /home/claude/littlegarden fetch --depth=1 origin dev-tools:refs/remotes/o
 git -C /home/claude/littlegarden show origin/dev-tools:tools/browser_test.py > /home/claude/browser_test.py
 git -C /home/claude/littlegarden show origin/dev-tools:tools/update_test.py > /home/claude/update_test.py
 cd /home/claude/littlegarden && (python3 -m http.server 8765 >/dev/null 2>&1 &) && sleep 1
-python3 /home/claude/browser_test.py | grep -v '^PASS'    # passing = only "ERRORS []" (251 PASS lines on 2.5.0; needs Pillow)
+python3 /home/claude/browser_test.py | grep -v '^PASS'    # passing = only "ERRORS []" (271 PASS lines on 2.6.0; needs Pillow)
 pkill -f "http.server 8765"
 python3 /home/claude/update_test.py /home/claude/littlegarden   # only if sw.js or initUpdates changed: 4 PASS, "ERRORS []"
 ```
@@ -97,18 +99,21 @@ Screenshots go to `/tmp/lg-shots` (phone-*.png, desktop-*.png, phone-dark-*.png)
 | Save to Files or iCloud button | Built (2.4.0); **tested only with a stubbed share sheet, never on a real iPhone** |
 | Ko-fi support link and card | Done (2.4.1, 2.4.2), by another chat |
 | Seven new categories (Travel, Rent & Housing, Subscriptions, Coffee & Snacks, Beauty & Grooming, Taxes & Government Fees, Professional Fees) | Built and merged (2.5.0, PR #7); not yet seen on her iPhone |
-| Browser test | 251 checks, all pass on 2.5.0 (2026-11-21; adds 21-category and Ko-fi Home/About/footer checks); update test 4 pass on 2.4.0; check_sw PASS on 2.5.0 |
+| Subscriptions screen: auto-debit, Renewed / Let it end, Home card + menu count, Add to Calendar (.ics), migration from Recurring | Built (2.6.0), PR #8 open awaiting her "merge". **.ics on iPhone untested** (headless Chromium only checks the file contents) |
+| Browser test | 271 checks, all pass on 2.6.0 (2026-11-22; subscriptions block in its own context at the end); update test PASS on 2.6.0; check_sw PASS on 2.6.0 |
 
 ## 7. Next steps
-- 2.5.0 is live (merged 2026-11-21). First ask, after she has reopened the app: (1) does About show 2.5.0 (or later), and are the new categories in the form? (2) does the + button open the form and does the keyboard come up? (3) does "Save to Files or iCloud" appear in Tools and backup, and does the file arrive in Files? (4) does typing a price in yen on a trip work?
+- PR #8 (2.6.0 Subscriptions) is open: merge when she says "merge". Then ask, after she has reopened the app: (0) does Add to Calendar on a subscription open the iPhone "Add to Calendar" sheet (or land in Files, where tapping it adds it)? If it does neither, switch `subCalendarFile` to `navigator.share` with a text/calendar File or a data: URL. (1) does About show 2.6.0, and are the new categories in the form? (2) does the + button open the form and does the keyboard come up? (3) does "Save to Files or iCloud" appear in Tools and backup, and does the file arrive in Files? (4) does typing a price in yen on a trip work?
 - Her Japan trip runs Nov 30 to Dec 14, 2026. She has to add the trip herself in Trips, with her own exchange rate. The app has no live rates (it makes no outside requests) and Claude must not suggest a rate from memory.
 - Trip ideas not built (offer only if she asks): a budget per trip, a trip section in the PDF report, more than one currency per trip, splitting a shared cost.
 - Recurring limit: an item not added before its period ends is not carried over (same as before 2.4).
 - Known limits she was told about, if she asks: income is not in the category trend chart (it has its own chart); custom payment methods get an automatic colour.
 - Pay me ideas not built (offer only if she asks): more accounts, reordering, auto-cropping the QR from a full screenshot.
 - Other apps menu group: `SHOW_OTHER_APPS` is false in `data/app-meta.js`, as in her other apps. Turn it on only when she interlinks them all.
-- The next version is 2.5.1 for a fix or 2.6.0 for a feature (check `data/app-meta.js` on `main` first, in case another chat released since).
+- The next version is 2.6.1 for a fix or 2.7.0 for a feature (2.6.0 if PR #8 was never merged) (check `data/app-meta.js` on `main` first, in case another chat released since).
 - Ko-fi checks were added to the browser test in 2.5.0.
+- Subscriptions design (her choices, 2026-11-22): own screen; auto-debit adds the payment by itself with Undo; Add to Calendar for real phone notifications (the app has no server, so no push); monthly/yearly recurring items in Subscriptions moved over once as paid by hand (weekly/quarterly ones stay in Recurring). New and edited dates must be today or later (the input has `min`), so nothing is back-filled by surprise. Undo of an auto-debit removes the payment but keeps the date moved on (otherwise it would be re-added); Undo of Renewed also restores the date.
+- Subscription ideas not built (offer only if she asks): quarterly cycle, free-trial end dates, price-change history, a subscriptions section in the PDF report.
 - Category ideas offered 2026-11-21 that she did NOT pick (offer only if she asks): Insurance, Loan/credit card payments, Family support/padala, Fitness & sports.
 
 ## 8. Pitfalls learned

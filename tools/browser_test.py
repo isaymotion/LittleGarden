@@ -347,7 +347,7 @@ with sync_playwright() as p:
         pg.goto(URL+'#/'); pg.wait_for_timeout(150)
         check(label+' no trip box without trips',not pg.is_visible('#homeTrip.trip-home') and (label=='phone' or not pg.is_visible('#tripFields')))
         # overflow check
-        for r in ['#/','#/transactions','#/insights','#/calendar','#/budget','#/trips','#/pay-me','#/tools','#/whats-new','#/about']:
+        for r in ['#/','#/transactions','#/insights','#/calendar','#/budget','#/trips','#/subscriptions','#/pay-me','#/tools','#/whats-new','#/about']:
             pg.goto(URL+r); pg.wait_for_timeout(150)
             ow=pg.evaluate("document.documentElement.scrollWidth-window.innerWidth"); check(f'{label} no horizontal overflow {r} ({ow})',ow<=1)
         ctx.close()
@@ -370,5 +370,69 @@ with sync_playwright() as p:
     check('backup shared as a json file',pg.evaluate("window.__shared[0]||''").endswith('.json') and 'Done' in pg.inner_text('#shareBackupMessage') and pg.evaluate("localStorage.getItem('little-garden-last-backup')") is not None and not pg.is_visible('#shareBackupGo'))
     pg.goto(URL+'#/'); pg.wait_for_timeout(200); pg.screenshot(path=OUT+'/phone-dark-home.png')
     pg.click('#fabAdd'); pg.wait_for_timeout(150); pg.screenshot(path=OUT+'/phone-dark-form.png')
+    # Subscriptions (2.6): migration from Recurring, auto-debit with Undo, Renewed with Undo, form, calendar file, ending, backup
+    import calendar as _cal
+    def addm(dt,k,day):
+        y,m=divmod(dt.month-1+k,12); y+=dt.year; m+=1
+        return datetime.date(y,m,min(day,_cal.monthrange(y,m)[1])).isoformat()
+    ctx=b.new_context(viewport={'width':390,'height':844},service_workers='block',color_scheme='dark',accept_downloads=True)
+    pg=ctx.new_page(); pg.on('pageerror',lambda e:errors.append('pageerror '+str(e)) or print('PAGEERROR',e))
+    past=today-datetime.timedelta(days=3)
+    rec=[{"id":"r1","item":"Netflix","price":549,"category":"Subscriptions","freq":"monthly","day":1,"done":""},
+         {"id":"r2","item":"Internet","price":1699,"category":"Utilities & Internet","freq":"monthly","day":31,"done":""},
+         {"id":"r3","item":"Gym","price":800,"category":"Subscriptions","freq":"weekly","weekday":1,"day":1,"done":""}]
+    sb=[{"id":"auto1","name":"Spotify","price":279,"cycle":"monthly","next":past.isoformat(),"day":past.day,"auto":True,"remind":3}]
+    pg.goto(URL); pg.evaluate("a=>{localStorage.clear();localStorage.setItem('little-garden-expenses-v1',a[0]);localStorage.setItem('little-garden-recurring',a[1]);localStorage.setItem('little-garden-subscriptions-v1',a[2]);}",[json.dumps(seed[:3]),json.dumps(rec),json.dumps(sb)]); pg.reload(); pg.wait_for_timeout(400)
+    subs=lambda:pg.evaluate("JSON.parse(localStorage.getItem('little-garden-subscriptions-v1')||'[]')")
+    exps=lambda:pg.evaluate("JSON.parse(localStorage.getItem('little-garden-expenses-v1'))")
+    recs=pg.evaluate("JSON.parse(localStorage.getItem('little-garden-recurring'))")
+    nf=[x for x in subs() if x['name']=='Netflix']
+    check('subs: monthly Subscriptions recurring moved, others stay',[r['id'] for r in recs]==['r2','r3'] and len(nf)==1 and nf[0]['auto'] is False and nf[0]['next']==today.replace(day=1).isoformat())
+    sp=[e for e in exps() if e['item']=='Spotify']
+    spn=[x for x in subs() if x['id']=='auto1'][0]
+    check('subs: auto-debit added on its date and moved on a month',len(sp)==1 and sp[0]['date']==past.isoformat() and sp[0]['category']=='Subscriptions' and spn['next']==addm(past,1,past.day))
+    check('subs: toast offers Undo',pg.is_visible('#undoToast') and 'Auto-debit' in pg.inner_text('#undoMessage') and pg.is_visible('#undoDeleteBtn'))
+    pg.click('#undoDeleteBtn'); pg.wait_for_timeout(200)
+    check('subs: Undo removes the payment, date stays moved',not [e for e in exps() if e['item']=='Spotify'] and [x for x in subs() if x['id']=='auto1'][0]['next']==spn['next'])
+    pg.reload(); pg.wait_for_timeout(300)
+    check('subs: migration and auto-debit do not repeat on reload',not [e for e in exps() if e['item']=='Spotify'] and len([x for x in subs() if x['name']=='Netflix'])==1)
+    check('subs: Home lists the expired by-hand one, menu count',pg.is_visible('#subsHome') and 'Netflix' in pg.inner_text('#subsHomeList') and pg.evaluate("[...document.querySelectorAll('[data-badge=subs]')].some(e=>!e.hidden&&Number(e.textContent)>=1)"))
+    pg.screenshot(path=OUT+'/phone-dark-subs-home.png',full_page=True)
+    pg.click('#subsHomeList [data-sub-act=renew]'); pg.wait_for_timeout(200)
+    nf2=[x for x in subs() if x['name']=='Netflix'][0]; ne=[e for e in exps() if e['item']=='Netflix']
+    check('subs: Renewed adds today and moves the date on',len(ne)==1 and ne[0]['date']==today.isoformat() and nf2['next']>today.isoformat())
+    pg.click('#undoDeleteBtn'); pg.wait_for_timeout(200)
+    check('subs: Undo of Renewed restores the date',not [e for e in exps() if e['item']=='Netflix'] and [x for x in subs() if x['name']=='Netflix'][0]['next']==today.replace(day=1).isoformat())
+    pg.goto(URL+'#/subscriptions'); pg.wait_for_timeout(200)
+    check('subs: screen and nav item',pg.is_visible('#subsView') and pg.evaluate("!!document.querySelector('.nav-item[href=\"#/subscriptions\"]')") and pg.input_value('#subNext')=='' and pg.get_attribute('#subNext','min')==today.isoformat())
+    soon=(today+datetime.timedelta(days=2)).isoformat()
+    pg.fill('#subName','YouTube Premium'); pg.fill('#subPrice','159'); pg.fill('#subNext',soon); pg.select_option('#subMethod','GCash'); pg.click('#subSaveBtn'); pg.wait_for_timeout(200)
+    yt=[x for x in subs() if x['name']=='YouTube Premium']
+    check('subs: form adds an auto-debit one',len(yt)==1 and yt[0]['auto'] is True and yt[0]['method']=='GCash' and yt[0]['remind']==3 and 'added' in pg.inner_text('#subMessage'))
+    pg.fill('#subName','iCloud+'); pg.fill('#subPrice','1490'); pg.select_option('#subCycle','yearly'); pg.fill('#subNext',today.isoformat()); pg.click('#subSaveBtn'); pg.wait_for_timeout(200)
+    ic=[x for x in subs() if x['name']=='iCloud+'][0]
+    check('subs: one renewing today is recorded straight away, next year',len([e for e in exps() if e['item']=='iCloud+'])==1 and ic['next']==addm(today,12,today.day))
+    pg.evaluate("document.getElementById('undoToast').hidden=true")
+    pg.uncheck('#subAuto'); check('subs: by-hand label says expiry',pg.inner_text('#subNextLabel')=='Expiry date'); pg.check('#subAuto')
+    tot=pg.inner_text('#subsTotal')
+    check('subs: monthly and yearly total',('a month' in tot) and ('a year' in tot) and '4 active' in tot)
+    card=pg.locator('.sub-card',has_text='YouTube Premium')
+    with pg.expect_download() as dl: card.locator('[data-sub-act=calendar]').click()
+    ics=open(dl.value.path(),encoding='utf-8').read()
+    check('subs: calendar file repeats with alarms',ics.startswith('BEGIN:VCALENDAR') and 'RRULE:FREQ=MONTHLY' in ics and 'TRIGGER:-P3D' in ics and f"DTSTART:{soon.replace('-','')}T090000" in ics and dl.value.suggested_filename.endswith('.ics'))
+    card.locator('[data-sub-act=edit]').click(); pg.wait_for_timeout(100)
+    pg.fill('#subPrice','189'); pg.click('#subSaveBtn'); pg.wait_for_timeout(200)
+    check('subs: edit keeps one entry',[x['price'] for x in subs() if x['name']=='YouTube Premium']==[189])
+    pg.once('dialog',lambda dlg:dlg.accept()); pg.locator('.sub-card',has_text='YouTube Premium').locator('[data-sub-act=end]').click(); pg.wait_for_timeout(200)
+    check('subs: Let it end moves it to Ended',[x['status'] for x in subs() if x['name']=='YouTube Premium']==['ended'] and pg.is_visible('#subEndedWrap') and 'YouTube Premium' in pg.inner_text('#subEndedList'))
+    pg.screenshot(path=OUT+'/phone-dark-subs.png',full_page=True)
+    pg.goto(URL+'#/tools'); pg.wait_for_timeout(150)
+    with pg.expect_download() as dl2: pg.click('#exportJsonBtn')
+    bk=json.load(open(dl2.value.path(),encoding='utf-8'))
+    check('subs: in the JSON backup',len(bk.get('subscriptions',[]))==4)
+    pg.evaluate("localStorage.removeItem('little-garden-subscriptions-v1')"); pg.reload(); pg.wait_for_timeout(200)
+    pg.select_option('#importMode','merge'); pg.set_input_files('#importFile',{'name':'bk.json','mimeType':'application/json','buffer':json.dumps(bk).encode()}); pg.wait_for_timeout(300)
+    check('subs: restored from backup',len(subs())==4)
+    ctx.close()
     b.close()
 print('ERRORS',errors)
