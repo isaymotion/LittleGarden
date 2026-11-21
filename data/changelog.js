@@ -5,9 +5,9 @@
    and "Latest version" in the footer of index.html. */
 window.APP_CHANGELOG = [
   {
-    version: '2.5.0', date: '2026-11-21', title: 'Travel category',
+    version: '2.5.0', date: '2026-11-21', title: 'Seven new categories',
     items: [
-      { type: 'feature', text: 'A new ✈️ Travel category, in the Property & transport spending area beside Transportation, for flights, hotels, tours and other trip costs. It appears in the entry form, filters, charts, budgets and recurring expenses. Expenses you already saved keep their category; tap Edit to move one.' }
+      { type: 'feature', text: 'Seven new categories: ✈️ Travel and 🏠 Rent & Housing (Property & transport), ☕ Coffee & Snacks and 📺 Subscriptions (Daily living), 💇 Beauty & Grooming (Health & care), 🩺 Professional Fees and 🏛️ Taxes & Government Fees (Lifestyle & other). They appear in the entry form, filters, charts, budgets and recurring expenses. Expenses you already saved keep their category; tap Edit to move one.' }
     ]
   },
   {

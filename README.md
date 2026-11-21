@@ -6,7 +6,7 @@ A mobile-first, garden-inspired monthly expense tracker for GitHub Pages. Record
 
 - **Local-first storage:** expenses are saved in this browser using `localStorage`; no account or server/database is needed.
 - **Entry fields:** date, item/description, price in PHP, fixed category, and optional notes.
-- **15 fixed categories:** Groceries; Restaurants & Dining; Medications & Healthcare; Property & Real Estate; Utilities & Internet; Pets; Transportation; Travel; Shopping & Personal Care; Clothes; Hobbies & Entertainment; Education & Professional Development; Books; Gifts & Donations; Miscellaneous.
+- **21 fixed categories:** Groceries; Restaurants & Dining; Coffee & Snacks; Medications & Healthcare; Property & Real Estate; Rent & Housing; Utilities & Internet; Subscriptions; Pets; Transportation; Travel; Shopping & Personal Care; Beauty & Grooming; Clothes; Hobbies & Entertainment; Education & Professional Development; Professional Fees; Books; Gifts & Donations; Taxes & Government Fees; Miscellaneous.
 - **Home dashboard:** quick expense entry, monthly summary, and the five most recent transactions; select a recent item to jump to its matching transaction.
 - **Insights:** monthly totals, category and area charts, daily spending, comparisons, calendar, and yearly trends.
 - **Transactions:** searchable, filterable, sortable history with edit and delete actions; shown as cards on phones.
@@ -33,10 +33,10 @@ A mobile-first, garden-inspired monthly expense tracker for GitHub Pages. Record
 
 | Spending area | Categories |
 |---|---|
-| Daily living | Groceries, Restaurants & Dining, Utilities & Internet |
-| Health & care | Medications & Healthcare, Pets, Shopping & Personal Care, Clothes |
-| Property & transport | Property & Real Estate, Transportation, Travel |
-| Lifestyle & other | Hobbies & Entertainment, Education & Professional Development, Books, Gifts & Donations, Miscellaneous |
+| Daily living | Groceries, Restaurants & Dining, Coffee & Snacks, Utilities & Internet, Subscriptions |
+| Health & care | Medications & Healthcare, Pets, Shopping & Personal Care, Beauty & Grooming, Clothes |
+| Property & transport | Property & Real Estate, Rent & Housing, Transportation, Travel |
+| Lifestyle & other | Hobbies & Entertainment, Education & Professional Development, Professional Fees, Books, Gifts & Donations, Taxes & Government Fees, Miscellaneous |
 
 ## Run locally
 
