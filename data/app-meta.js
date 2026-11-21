@@ -3,7 +3,8 @@ window.APP_META = {
   name: 'Little Garden',
   short: 'Little Garden',
   tagline: 'Monthly expense journal',
-  version: '2.4.0',
+  version: '2.4.1',
+  kofi: 'https://ko-fi.com/isaymotion',   // support link shown in the footer
   repo: 'LittleGarden',
   attribution: 'App created by Isabella Navarro, MD. Latest version November 2026. isaymotion@gmail.com'
 };

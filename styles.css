@@ -709,3 +709,7 @@ body.pay-viewer-open{overflow:hidden}
 .flow-key--rate{width:16px;height:3px;border-radius:2px;background:#8a6fb5}
 :root[data-theme="dark"] .flow-key--rate{background:#b9a3e0}
 .field-grow .fx-hint{margin-top:5px}
+
+/* Ko-fi support link under the attribution line */
+.support-line{margin:0 0 10px}
+.support-line a{display:inline-flex;align-items:center;min-height:44px;color:inherit;font-weight:600;text-underline-offset:3px}
