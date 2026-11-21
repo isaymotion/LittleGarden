@@ -28,17 +28,24 @@
   const categories = [
     {name:"Groceries", icon:"🥬", area:"Daily living", color:"#80a878"},
     {name:"Restaurants & Dining", icon:"🍲", area:"Daily living", color:"#e7b66c"},
+    {name:"Coffee & Snacks", icon:"☕", area:"Daily living", color:"#9c7356"},
     {name:"Medications & Healthcare", icon:"🌼", area:"Health & care", color:"#d98d8b"},
     {name:"Property & Real Estate", icon:"🏡", area:"Property & transport", color:"#9a8ab8"},
+    {name:"Rent & Housing", icon:"🏠", area:"Property & transport", color:"#7a6fa0"},
     {name:"Utilities & Internet", icon:"💧", area:"Daily living", color:"#79b9c0"},
+    {name:"Subscriptions", icon:"📺", area:"Daily living", color:"#8fb6d9"},
     {name:"Pets", icon:"🐾", area:"Health & care", color:"#c59b75"},
     {name:"Transportation", icon:"🚲", area:"Property & transport", color:"#8099c5"},
+    {name:"Travel", icon:"✈️", area:"Property & transport", color:"#4f9a8f"},
     {name:"Shopping & Personal Care", icon:"🌷", area:"Health & care", color:"#df9fc0"},
+    {name:"Beauty & Grooming", icon:"💇", area:"Health & care", color:"#b86b8a"},
     {name:"Clothes", icon:"👗", area:"Health & care", color:"#c47fa5"},
     {name:"Hobbies & Entertainment", icon:"🎨", area:"Lifestyle & other", color:"#b7a2d3"},
     {name:"Education & Professional Development", icon:"📚", area:"Lifestyle & other", color:"#a6b9a0"},
+    {name:"Professional Fees", icon:"🩺", area:"Lifestyle & other", color:"#c98a4b"},
     {name:"Books", icon:"📖", area:"Lifestyle & other", color:"#b9a04a"},
     {name:"Gifts & Donations", icon:"🎁", area:"Lifestyle & other", color:"#e5a58e"},
+    {name:"Taxes & Government Fees", icon:"🏛️", area:"Lifestyle & other", color:"#7d8a99"},
     {name:"Miscellaneous", icon:"🍃", area:"Lifestyle & other", color:"#a9b0a2"}
   ];
   const areas = [

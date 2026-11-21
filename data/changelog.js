@@ -5,6 +5,12 @@
    and "Latest version" in the footer of index.html. */
 window.APP_CHANGELOG = [
   {
+    version: '2.5.0', date: '2026-11-21', title: 'Seven new categories',
+    items: [
+      { type: 'feature', text: 'Seven new categories: ✈️ Travel and 🏠 Rent & Housing (Property & transport), ☕ Coffee & Snacks and 📺 Subscriptions (Daily living), 💇 Beauty & Grooming (Health & care), 🩺 Professional Fees and 🏛️ Taxes & Government Fees (Lifestyle & other). They appear in the entry form, filters, charts, budgets and recurring expenses. Expenses you already saved keep their category; tap Edit to move one.' }
+    ]
+  },
+  {
     version: '2.4.2', date: '2026-11-21', title: 'Support card on Home and About',
     items: [
       { type: 'update', text: 'A “Support on Ko-fi” card now sits at the end of Home and About, as well as the link at the bottom of every page.' }
