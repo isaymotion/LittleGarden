@@ -719,3 +719,15 @@ body.pay-viewer-open{overflow:hidden}
 .support-card h2{margin:0 0 6px;font-size:1.1rem}
 .support-card p{margin:0 0 12px}
 .support-card p:last-child{margin-bottom:0}
+
+/* ===== Version 2.6: Subscriptions ===== */
+.sub-auto{display:flex;align-items:center;gap:10px;font-size:.95rem;font-weight:500;cursor:pointer}
+.sub-auto input{width:22px;height:22px;min-width:22px;min-height:22px;margin:0;accent-color:var(--deep)}
+.mini-form .mini-field:has(.sub-auto) .chart-subtitle{margin:4px 0 0}
+@media(min-width:900px){#subForm .mini-field.mini-wide{grid-column:1/-1}}
+.subs-total{margin:0 0 14px;font-weight:650;color:var(--deep)}
+.subs-total:empty{display:none}
+.sub-card .trip-card__total small{font-size:.75rem;font-weight:500;color:var(--muted)}
+.subs-ended-title{margin:22px 0 10px;font-size:1rem;color:var(--muted)}
+#subEndedList .sub-card{opacity:.8}
+.subs-home .due-actions{flex-wrap:wrap;justify-content:flex-end}
