@@ -5,6 +5,13 @@
    and "Latest version" in the footer of index.html. */
 window.APP_CHANGELOG = [
   {
+    version: '2.6.1', date: '2026-11-23', title: 'Subscriptions you record as expenses',
+    items: [
+      { type: 'correction', text: 'A subscription you record as an ordinary expense under 📺 Subscriptions now shows on the Subscriptions screen under “Found in your expenses”. Tap Track and the form fills itself in with the name, price, how you paid, monthly or yearly, and the renewal date (taken from the name when it has one, such as “till Nov 12, 2027”). Tap Not a subscription to hide it.', href: '#/subscriptions' },
+      { type: 'update', text: 'When you add an expense under Subscriptions that is not tracked yet, the message at the bottom offers a Track button that takes you straight there.' }
+    ]
+  },
+  {
     version: '2.6.0', date: '2026-11-22', title: 'Subscriptions',
     items: [
       { type: 'feature', text: 'A new Subscriptions screen in the menu. Each subscription has its price, monthly or yearly, the date it renews or expires, how it is paid, notes, and a reminder 1, 3 or 7 days ahead (or on the day). The top shows what they cost you a month and a year.', href: '#/subscriptions' },

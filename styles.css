@@ -731,3 +731,8 @@ body.pay-viewer-open{overflow:hidden}
 .subs-ended-title{margin:22px 0 10px;font-size:1rem;color:var(--muted)}
 #subEndedList .sub-card{opacity:.8}
 .subs-home .due-actions{flex-wrap:wrap;justify-content:flex-end}
+
+/* ===== Version 2.6.1: subscriptions found in expenses ===== */
+.sub-found{margin:6px 0 18px;padding:14px 16px;border:1px dashed var(--line);border-radius:16px}
+.sub-found .subs-ended-title{margin-top:0}
+.undo-toast #undoTrackBtn+#undoDeleteBtn{margin-left:-8px}
