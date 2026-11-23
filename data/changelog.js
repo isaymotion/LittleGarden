@@ -5,6 +5,12 @@
    and "Latest version" in the footer of index.html. */
 window.APP_CHANGELOG = [
   {
+    version: '2.6.2', date: '2026-11-23', title: 'Rename a payment method',
+    items: [
+      { type: 'feature', text: 'Payment methods can be renamed: tap ✎ beside one in Budget and income. Expenses, recurring items and subscriptions already paid with it change to the new name too, so Insights keeps them together. A renamed GCash keeps its blue.', href: '#/budget' }
+    ]
+  },
+  {
     version: '2.6.1', date: '2026-11-23', title: 'Subscriptions you record as expenses',
     items: [
       { type: 'correction', text: 'A subscription you record as an ordinary expense under 📺 Subscriptions now shows on the Subscriptions screen under “Found in your expenses”. Tap Track and the form fills itself in with the name, price, how you paid, monthly or yearly, and the renewal date (taken from the name when it has one, such as “till Nov 12, 2027”). Tap Not a subscription to hide it.', href: '#/subscriptions' },
