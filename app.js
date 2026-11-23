@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const STORAGE_KEY = "little-garden-expenses-v1";
-  const KEYS = {views:"little-garden-saved-views",lastCategory:"little-garden-last-category",theme:"little-garden-theme",textSize:"little-garden-text-size",navCollapsed:"little-garden-nav-collapsed",seenNews:"little-garden-seen-news",importUndo:"little-garden-import-undo",lastBackup:"little-garden-last-backup",recovery:"little-garden-expenses-recovery",budgets:"little-garden-budgets",recurring:"little-garden-recurring",income:"little-garden-income-v1",lastMethod:"little-garden-last-method",backupSnooze:"little-garden-backup-snooze",payMe:"little-garden-pay-me-v1",methods:"little-garden-methods",trips:"little-garden-trips-v1",subs:"little-garden-subscriptions-v1",subsMigrated:"little-garden-subs-migrated"};
+  const KEYS = {views:"little-garden-saved-views",lastCategory:"little-garden-last-category",theme:"little-garden-theme",textSize:"little-garden-text-size",navCollapsed:"little-garden-nav-collapsed",seenNews:"little-garden-seen-news",importUndo:"little-garden-import-undo",lastBackup:"little-garden-last-backup",recovery:"little-garden-expenses-recovery",budgets:"little-garden-budgets",recurring:"little-garden-recurring",income:"little-garden-income-v1",lastMethod:"little-garden-last-method",backupSnooze:"little-garden-backup-snooze",payMe:"little-garden-pay-me-v1",methods:"little-garden-methods",trips:"little-garden-trips-v1",subs:"little-garden-subscriptions-v1",subsMigrated:"little-garden-subs-migrated",subsSkipped:"little-garden-subs-skipped"};
   const DEFAULT_METHODS = ["Cash","GCash","Card","Bank transfer","Other"];
   const NO_METHOD = "Not set";
   const methodColors = {"Cash":"#80a878","GCash":"#8099c5","Card":"#d98d8b","Bank transfer":"#e7b66c","Other":"#b7a2d3","Not set":"#a9b0a2"};
@@ -236,6 +236,7 @@
     $("savedViewSelect").addEventListener("change",applySavedView);
     $("resetFiltersBtn").addEventListener("click",resetFilters);
     $("undoDeleteBtn").addEventListener("click",undoDelete);
+    $("undoTrackBtn").addEventListener("click",()=>{const id=toastTrackId;$("undoToast").hidden=true;if(undoTimer)clearTimeout(undoTimer);undoTimer=null;undoEntry=null;if(id)go("subscriptions",()=>trackFromExpense(id));});
     $("exportJsonBtn").addEventListener("click",exportJSON);
     $("exportJsonBtn2").addEventListener("click",exportJSON);
     $("exportCsvBtn").addEventListener("click",exportCSV);
@@ -298,7 +299,7 @@
     if(isPhone()){
       setEntryOpen(false);
       if(id)showUndoToast("Expense updated.",false);
-      else{undoEntry={addedId:entry.id};showUndoToast(`Added “${entry.item}”, ${money(entry.price)}.`);}
+      else{const track=untrackedSub(entry);undoEntry={addedId:entry.id};showUndoToast(`Added “${entry.item}”, ${money(entry.price)}.${track?" Track its renewal in Subscriptions?":""}`,true,track?entry.id:null);}
     }
     if(back&&back!=="home")go(back);
   }
@@ -328,10 +329,12 @@
     if(!saveExpenses()){expenses=previous;undoEntry=null;return;}
     renderAll();showUndoToast(`Deleted “${entry.item}”.`);
   }
-  function showUndoToast(message,canUndo=true){
+  let toastTrackId=null;
+  function showUndoToast(message,canUndo=true,trackId=null){
     const toast=$("undoToast");$("undoMessage").textContent=message;toast.hidden=false;
     if(!canUndo)undoEntry=null;
     $("undoDeleteBtn").classList.toggle("hidden",!canUndo);
+    toastTrackId=trackId;$("undoTrackBtn").classList.toggle("hidden",!trackId);
     if(undoTimer)clearTimeout(undoTimer);
     undoTimer=setTimeout(()=>{toast.hidden=true;undoEntry=null;undoTimer=null;},8000);
   }
@@ -1324,6 +1327,8 @@
      forward a cycle. The others wait on Home for Renewed or Let it end. `day` keeps the original
      day of the month, so a plan on the 31st stays at month end instead of drifting to the 28th.
      Payments are ordinary expenses in the Subscriptions category; nothing links them back.
+     2.6.1: an expense typed in that category that matches no subscription by name is offered on
+     the Subscriptions screen (and in the toast after saving) so she can track it in one tap.
      ===================================================================================== */
   function cleanSubs(v){   // runs on the first lines of the app: no consts from further down
     if(!Array.isArray(v))return [];
@@ -1459,7 +1464,62 @@
       <div class="trip-actions">${acts}</div>`;
     return card;
   }
+  // 2.6.1: expenses in the Subscriptions category that no subscription covers, offered for tracking.
+  const subNorm = t => String(t||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+  const SUB_MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+  const SUB_DATE_RE = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b|\b(\d{4})-(\d{2})-(\d{2})\b/i;
+  function subSkipped(){try{const v=JSON.parse(lsGet(KEYS.subsSkipped)||"[]");return Array.isArray(v)?v:[];}catch(e){return [];}}
+  function subGuessName(e){
+    let t=String(e.item||"").replace(SUB_DATE_RE," ").replace(/\s+/g," ").trim();
+    t=t.replace(/[\s,(-]*\b(till|until|thru|through|to|expires?|exp|valid|due|renews?|from)\b\.?[\s,)]*$/i,"");
+    t=t.replace(/\b(annual|annually|yearly|monthly|per (month|year)|1 ?(yr|year)|12 ?(mos?|months))\b/ig," ").replace(/[\s,(-]+$/,"").replace(/\s+/g," ").trim();
+    return (t||String(e.item||"").trim()).slice(0,60);
+  }
+  function untrackedSub(e){
+    if(!e||e.category!==SUB_CATEGORY)return false;
+    const item=subNorm(e.item),name=subNorm(subGuessName(e));
+    if(!item)return false;
+    return !subs.some(s=>{const n=subNorm(s.name);return n&&(item.includes(n)||n.includes(name));});
+  }
+  function subsFound(){
+    const skipped=new Set(subSkipped()),cut=new Date();cut.setDate(cut.getDate()-400);
+    const since=`${cut.getFullYear()}-${String(cut.getMonth()+1).padStart(2,"0")}-${String(cut.getDate()).padStart(2,"0")}`,byName=new Map();
+    expenses.filter(e=>e.date>=since&&!skipped.has(subNorm(subGuessName(e)))&&untrackedSub(e)).sort((a,b)=>b.date.localeCompare(a.date)).forEach(e=>{const k=subNorm(subGuessName(e));if(!byName.has(k))byName.set(k,e);});
+    return [...byName.values()].slice(0,12);
+  }
+  function guessSub(e){
+    const text=`${e.item} ${e.notes||""}`,today=localDate(),m=text.match(SUB_DATE_RE);
+    let next="";
+    if(m){const d=m[1]?`${m[3]}-${String(SUB_MONTHS.indexOf(m[1].slice(0,3).toLowerCase())+1).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`:`${m[4]}-${m[5]}-${m[6]}`;if(validDate(d)&&d>=today)next=d;}
+    const yearly=/\b(annual|annually|yearly|1 ?(yr|year)|12 ?(mos?|months))\b/i.test(text)||(next&&daysUntil(next)>200);
+    const cycle=yearly?"yearly":"monthly";
+    if(!next){const day=Number(e.date.slice(8,10));next=addCycle(e.date,cycle,day);for(let n=0;next<today&&n<60;n++)next=addCycle(next,cycle,day);}
+    return {name:subGuessName(e),price:e.price,cycle,next,method:e.method||""};
+  }
+  function trackFromExpense(id){
+    const e=expenses.find(x=>x.id===id);if(!e)return;
+    resetSubForm();const g=guessSub(e);
+    $("subName").value=g.name;$("subPrice").value=g.price;$("subCycle").value=g.cycle;$("subNext").value=g.next;
+    $("subMethod").value=g.method;if(g.method&&$("subMethod").value!==g.method){$("subMethod").add(new Option(g.method,g.method));$("subMethod").value=g.method;}
+    $("subCancelBtn").classList.remove("hidden");
+    $("subMessage").textContent=`Filled in from “${e.item}”. Check the date and auto-debit, then tap Add subscription.`;
+    $("subForm").scrollIntoView({block:"start"});
+  }
+  function skipFound(id){   // remembered by name, so older and later payments of it stay hidden too
+    const e=expenses.find(x=>x.id===id);if(!e)return;const key=subNorm(subGuessName(e));
+    const list=[...subSkipped().filter(x=>x!==key),key].slice(-200);lsSet(KEYS.subsSkipped,JSON.stringify(list));renderSubs();
+  }
+  function renderSubsFound(){
+    const wrap=$("subFound");if(!wrap)return;
+    const found=subsFound(),list=$("subFoundList");wrap.classList.toggle("hidden",!found.length);list.innerHTML="";
+    found.forEach(e=>{
+      const row=document.createElement("div");row.className="recent-transaction due-row";row.dataset.found=e.id;
+      row.innerHTML=`<span class="recent-category-icon" aria-hidden="true">📺</span><span class="recent-main"><strong>${escapeHTML(e.item)}</strong><small>Paid ${escapeHTML(subDate(e.date))}${e.method?` · ${escapeHTML(e.method)}`:""}</small></span><strong class="recent-amount">${money(e.price)}</strong><span class="due-actions"><button class="button button-primary" type="button" data-found-act="track" aria-label="Track ${escapeHTML(e.item)}">Track</button><button class="button button-quiet" type="button" data-found-act="skip" aria-label="Not a subscription: ${escapeHTML(e.item)}">Not a subscription</button></span>`;
+      list.appendChild(row);
+    });
+  }
   function renderSubs(){
+    renderSubsFound();
     const host=$("subList");if(!host)return;
     const active=subs.filter(s=>s.status==="active").sort((a,b)=>a.next.localeCompare(b.next)),ended=subs.filter(s=>s.status==="ended").sort((a,b)=>(b.endedOn||"").localeCompare(a.endedOn||""));
     const monthly=Math.round(active.reduce((n,s)=>n+(s.cycle==="yearly"?s.price/12:s.price)*100,0))/100;
@@ -1513,6 +1573,7 @@
     $("subCancelBtn").addEventListener("click",()=>{resetSubForm();$("subMessage").textContent="";});
     $("subAuto").addEventListener("change",syncSubFields);
     ["subList","subEndedList","subsHomeList"].forEach(id=>$(id).addEventListener("click",onSubListClick));
+    $("subFoundList").addEventListener("click",event=>{const b=event.target.closest("button[data-found-act]");if(!b)return;const id=b.closest("[data-found]").dataset.found;if(b.dataset.foundAct==="track")trackFromExpense(id);else skipFound(id);});
     document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){processAutoDebits();renderSubsHome();}});
     resetSubForm();
   }

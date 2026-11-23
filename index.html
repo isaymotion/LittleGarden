@@ -358,6 +358,7 @@
 <div class="page-view" data-view="subscriptions" hidden="" id="subsView"><section aria-labelledby="subsTitle" class="panel">
 <div class="section-heading"><div><p class="eyebrow">EVERY SEASON</p><h2 id="subsTitle">Subscriptions</h2><p class="chart-subtitle">Streaming, apps, memberships and plans. Set the date each one renews or expires and Little Garden reminds you before it does. Each payment is recorded under 📺 Subscriptions.</p></div><span aria-hidden="true" class="leaf-badge">↻</span></div>
 <p class="subs-total" id="subsTotal"></p>
+<div class="hidden sub-found" id="subFound"><h3 class="subs-ended-title">Found in your expenses</h3><p class="chart-subtitle">Recorded under 📺 Subscriptions but not tracked here yet. Tap Track to fill in the form with it.</p><div class="recent-transaction-list" id="subFoundList"></div></div>
 <form class="mini-form" id="subForm">
 <input id="subId" type="hidden"/>
 <div class="mini-field mini-wide"><label for="subName">Name</label><input autocomplete="off" id="subName" maxlength="60" placeholder="e.g. Netflix, Spotify, iCloud+" required="" type="text"/></div>
@@ -414,7 +415,7 @@
 </nav>
 
 <button aria-expanded="false" aria-label="Add an expense" class="fab" id="fabAdd" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.6"/></svg></button>
-<div aria-live="polite" class="undo-toast" hidden="" id="undoToast" role="status"><span id="undoMessage">Expense deleted.</span><button class="button button-outline" id="undoDeleteBtn" type="button">Undo</button></div>
+<div aria-live="polite" class="undo-toast" hidden="" id="undoToast" role="status"><span id="undoMessage">Expense deleted.</span><button class="button button-primary hidden" id="undoTrackBtn" type="button">Track</button><button class="button button-outline" id="undoDeleteBtn" type="button">Undo</button></div>
 <script src="data/app-meta.js"></script>
 <script src="data/changelog.js"></script>
 <script src="app.js"></script>
