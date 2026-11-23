@@ -332,11 +332,12 @@
 </form>
 <div class="recent-transaction-list" id="incomeList"></div>
 </section><section aria-labelledby="methodsTitle" class="panel">
-<div class="section-heading"><div><p class="eyebrow">HOW YOU PAY</p><h2 id="methodsTitle">Payment methods</h2><p class="chart-subtitle">The choices under “Paid with”. Add your own, such as a particular card or bank, so Insights can tell them apart.</p></div></div>
+<div class="section-heading"><div><p class="eyebrow">HOW YOU PAY</p><h2 id="methodsTitle">Payment methods</h2><p class="chart-subtitle">The choices under “Paid with”. Add your own, such as a particular card or bank, so Insights can tell them apart. Tap ✎ to rename one.</p></div></div>
 <div class="method-list" id="methodList"></div>
 <form class="mini-form" id="methodForm">
-<div class="mini-field mini-wide"><label for="methodName">New payment method</label><input autocomplete="off" id="methodName" maxlength="30" placeholder="e.g. BPI credit card" type="text"/></div>
-<div class="form-actions mini-wide"><button class="button button-outline" type="submit">Add payment method</button></div>
+<input id="methodRenaming" type="hidden"/>
+<div class="mini-field mini-wide"><label for="methodName" id="methodNameLabel">New payment method</label><input autocomplete="off" id="methodName" maxlength="30" placeholder="e.g. BPI credit card" type="text"/></div>
+<div class="form-actions mini-wide"><button class="button button-outline" id="methodSubmit" type="submit">Add payment method</button><button class="button button-quiet hidden" id="methodCancel" type="button">Cancel</button></div>
 <p aria-live="polite" class="form-message mini-wide" id="methodMessage" role="status"></p>
 </form>
 </section></div>

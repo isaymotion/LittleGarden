@@ -24,7 +24,8 @@
   }
   let METHODS = cleanMethods((()=>{ try { return JSON.parse(lsGet(KEYS.methods)); } catch(e) { return null; } })());
   const cleanMethod = value => { const name=tidyName(value,30),key=name.toLowerCase(); if(!name||key===NO_METHOD.toLowerCase())return ""; return METHODS.find(m=>m.toLowerCase()===key) || name; };
-  const methodColor = name => methodColors[name] || METHOD_PALETTE[Math.abs([...String(name)].reduce((n,c)=>(n*31+c.charCodeAt(0))|0,7))%METHOD_PALETTE.length];
+  // A renamed default keeps its colour: "GCash/Maya" stays GCash blue (2.6.2).
+  const methodColor = name => methodColors[name] || methodColors[Object.keys(methodColors).find(k=>k!=="Other"&&String(name).toLowerCase().startsWith(k.toLowerCase()))] || METHOD_PALETTE[Math.abs([...String(name)].reduce((n,c)=>(n*31+c.charCodeAt(0))|0,7))%METHOD_PALETTE.length];
   const categories = [
     {name:"Groceries", icon:"🥬", area:"Daily living", color:"#80a878"},
     {name:"Restaurants & Dining", icon:"🍲", area:"Daily living", color:"#e7b66c"},
@@ -218,6 +219,7 @@
     });
     $("recurringFreq").addEventListener("change",syncRecurringFields);
     $("methodForm").addEventListener("submit",addMethod);
+    $("methodCancel").addEventListener("click",()=>{stopRenameMethod();$("methodMessage").textContent="";});
     $("tripForm").addEventListener("submit",saveTrip);
     $("tripCancelBtn").addEventListener("click",()=>{resetTripForm();$("tripMessage").textContent="";});
     $("tripCurrency").addEventListener("change",syncTripRateField);
@@ -1185,8 +1187,10 @@
     const host=$("methodList");host.innerHTML="";
     METHODS.forEach(m=>{
       const chip=document.createElement("span");chip.className="method-chip";
-      chip.innerHTML=`<i style="background:${methodColor(m)}"></i><span>${escapeHTML(m)}</span><button class="icon-button" type="button" aria-label="Remove the payment method ${escapeHTML(m)}">×</button>`;
-      chip.querySelector("button").addEventListener("click",()=>{
+      chip.innerHTML=`<i style="background:${methodColor(m)}"></i><span>${escapeHTML(m)}</span><button class="icon-button" type="button" data-method-act="rename" aria-label="Rename the payment method ${escapeHTML(m)}">✎</button><button class="icon-button" type="button" data-method-act="remove" aria-label="Remove the payment method ${escapeHTML(m)}">×</button>`;
+      chip.querySelector('[data-method-act="rename"]').addEventListener("click",()=>startRenameMethod(m));
+      chip.querySelector('[data-method-act="remove"]').addEventListener("click",()=>{
+        if($("methodRenaming").value===m)stopRenameMethod();
         METHODS=METHODS.filter(x=>x!==m);lsSet(KEYS.methods,JSON.stringify(METHODS));
         fillMethodSelects();renderMethodList();renderReports();
         $("methodMessage").textContent=`“${m}” was taken off the list. Expenses already saved with it keep it.`;
@@ -1195,9 +1199,41 @@
     });
     if(!METHODS.length)host.innerHTML='<p class="chart-subtitle">The list is empty. Add a payment method below.</p>';
   }
+  // Rename (2.6.2): the list, and every saved expense, recurring item and subscription paid with it.
+  function startRenameMethod(m){
+    $("methodRenaming").value=m;$("methodNameLabel").textContent=`Rename “${m}” to`;$("methodName").value=m;
+    $("methodSubmit").textContent="Rename";$("methodCancel").classList.remove("hidden");$("methodMessage").textContent="";
+    $("methodName").focus();
+  }
+  function stopRenameMethod(){
+    $("methodRenaming").value="";$("methodNameLabel").textContent="New payment method";$("methodName").value="";
+    $("methodSubmit").textContent="Add payment method";$("methodCancel").classList.add("hidden");
+  }
+  function renameMethod(from,name,msg){
+    if(!name||name.toLowerCase()===NO_METHOD.toLowerCase()){msg.textContent="Type the new name first.";return;}
+    if(name===from){stopRenameMethod();return;}
+    if(METHODS.some(m=>m!==from&&m.toLowerCase()===name.toLowerCase())){msg.textContent=`“${name}” is already on the list. Remove one of them instead.`;return;}
+    const used=expenses.filter(e=>e.method===from).length;
+    if(used&&!confirm(`Rename “${from}” to “${name}”? ${used} saved ${used===1?"expense":"expenses"} paid with “${from}” will change too.`))return;
+    const prev={methods:METHODS,expenses,recurring,subs};
+    METHODS=METHODS.map(m=>m===from?name:m);
+    expenses=expenses.map(e=>e.method===from?{...e,method:name}:e);
+    recurring=recurring.map(r=>r.method===from?{...r,method:name}:r);
+    subs=subs.map(s=>s.method===from?{...s,method:name}:s);
+    if(!lsSet(KEYS.methods,JSON.stringify(METHODS))||!saveExpenses()||!saveRecurring()||!saveSubs()){
+      METHODS=prev.methods;expenses=prev.expenses;recurring=prev.recurring;subs=prev.subs;
+      lsSet(KEYS.methods,JSON.stringify(METHODS));saveExpenses();saveRecurring();saveSubs();
+      msg.textContent="Could not save in browser storage.";return;
+    }
+    if(lsGet(KEYS.lastMethod)===from)lsSet(KEYS.lastMethod,name);
+    if(journalMethod===from)journalMethod=name;
+    stopRenameMethod();renderAll();
+    msg.textContent=`“${from}” is now “${name}”${used?`, on ${used} saved ${used===1?"expense":"expenses"} too`:""}.`;
+  }
   function addMethod(event){
     event.preventDefault();
     const name=tidyName($("methodName").value,30),msg=$("methodMessage");
+    if($("methodRenaming").value){renameMethod($("methodRenaming").value,name,msg);return;}
     if(!name||name.toLowerCase()===NO_METHOD.toLowerCase()){msg.textContent="Type a name first, for example BPI credit card.";return;}
     if(METHODS.some(m=>m.toLowerCase()===name.toLowerCase())){msg.textContent=`“${name}” is already on the list.`;return;}
     if(METHODS.length>=20){msg.textContent="The list holds up to 20 payment methods. Remove one first.";return;}
