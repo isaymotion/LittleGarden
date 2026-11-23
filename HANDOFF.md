@@ -4,7 +4,7 @@
 - **What:** Little Garden, Dr. Isabella Navarro's personal monthly expense tracker in Philippine pesos (PHP). Private, offline, data only in the browser (localStorage + IndexedDB). Originally built by ChatGPT; rebuilt and extended by Claude from 2026-11-16.
 - **Repo:** `isaymotion/LittleGarden` (GitHub; the clone URL is lowercase `littlegarden`). Live from `main` on GitHub Pages: https://isaymotion.github.io/LittleGarden/
 - **Branches:** `main` = the site. `dev-tools` = this doc plus `tools/` (browser_test.py, update_test.py, README; never merged into main).
-- **Current version:** 2.6.0 (2026-11-22, Subscriptions) = PR #8, merged 2026-11-22. Open PRs: none. 2.5.0 = PR #7 (seven new categories), merged 2026-11-21. 2.4.0 = PR #6 (trips and more), merged 2026-11-17. 2.4.1 and 2.4.2 = Ko-fi support link and card, committed straight to `main` by another chat on 2026-11-21.
+- **Current version:** 2.6.1 (2026-11-23, subscriptions found in expenses) = PR #9, branch `claude/subs-from-expenses`, **OPEN: merge was refused by the permission check; waiting for her to say "merge"**. Live is still 2.6.0 = PR #8, merged 2026-11-22. 2.5.0 = PR #7 (seven new categories), merged 2026-11-21. 2.4.0 = PR #6 (trips and more), merged 2026-11-17. 2.4.1 and 2.4.2 = Ko-fi support link and card, committed straight to `main` by another chat on 2026-11-21.
 
 ## 2. Fixed rules
 - Footer and About attribution, exact: `App created by Isabella Navarro, MD. Latest version November 2026. isaymotion@gmail.com` (email is a mailto link). Only the month ever changes.
@@ -37,7 +37,7 @@ README.md             features, upload list, release steps
 **Routes** (hash): `#/` home, `#/pay-me` (menu group Start), `#/transactions`, `#/insights`, `#/calendar`, `#/budget`, `#/trips`, `#/subscriptions` (2.6, badge "subs"), `#/tools`, `#/whats-new`, `#/about`. Old `#journal` and `#reports` redirect. Adding a screen means a `page-view` in index.html plus an entry in `ROUTES` in app.js (label, icon, group); the menu builds itself. `route()` also sets `body[data-route]`.
 
 **localStorage keys** (`KEYS` in app.js):
-- Data: `little-garden-expenses-v1`, `-saved-views`, `-budgets`, `-recurring`, `-income-v1`, `-methods` (2.4), `-trips-v1` (2.4), `-subscriptions-v1` (2.6). Flag `-subs-migrated` (2.6) marks the one-time move from Recurring.
+- Data: `little-garden-expenses-v1`, `-saved-views`, `-budgets`, `-recurring`, `-income-v1`, `-methods` (2.4), `-trips-v1` (2.4), `-subscriptions-v1` (2.6). Flag `-subs-migrated` (2.6) marks the one-time move from Recurring. `-subs-skipped` (2.6.1) = array of normalized names she marked "Not a subscription".
 - Settings: `-theme`, `-text-size`, `-nav-collapsed`, `-seen-news`, `-last-category`, `-last-method`.
 - Pay me details: `little-garden-pay-me-v1` = `{gcash:{name,number,note,updatedAt}}`. **Pictures are NOT in localStorage**: IndexedDB database `little-garden-pay-me`, store `qr`, key = account id, value = JPEG data URL (scaled to 1400 px). Reason: every isaymotion app shares one origin and its ~5 MB localStorage.
 - Housekeeping: `-last-backup`, `-backup-snooze`, `-import-undo`, `-expenses-recovery`.
@@ -72,7 +72,7 @@ git -C /home/claude/littlegarden fetch --depth=1 origin dev-tools:refs/remotes/o
 git -C /home/claude/littlegarden show origin/dev-tools:tools/browser_test.py > /home/claude/browser_test.py
 git -C /home/claude/littlegarden show origin/dev-tools:tools/update_test.py > /home/claude/update_test.py
 cd /home/claude/littlegarden && (python3 -m http.server 8765 >/dev/null 2>&1 &) && sleep 1
-python3 /home/claude/browser_test.py | grep -v '^PASS'    # passing = only "ERRORS []" (271 PASS lines on 2.6.0; needs Pillow)
+python3 /home/claude/browser_test.py | grep -v '^PASS'    # passing = only "ERRORS []" (279 PASS lines on 2.6.1, 271 on 2.6.0; needs Pillow)
 pkill -f "http.server 8765"
 python3 /home/claude/update_test.py /home/claude/littlegarden   # only if sw.js or initUpdates changed: 4 PASS, "ERRORS []"
 ```
@@ -100,9 +100,13 @@ Screenshots go to `/tmp/lg-shots` (phone-*.png, desktop-*.png, phone-dark-*.png)
 | Ko-fi support link and card | Done (2.4.1, 2.4.2), by another chat |
 | Seven new categories (Travel, Rent & Housing, Subscriptions, Coffee & Snacks, Beauty & Grooming, Taxes & Government Fees, Professional Fees) | Built and merged (2.5.0, PR #7); not yet seen on her iPhone |
 | Subscriptions screen: auto-debit, Renewed / Let it end, Home card + menu count, Add to Calendar (.ics), migration from Recurring | Built and merged (2.6.0, PR #8). **.ics on iPhone untested** (headless Chromium only checks the file contents) |
-| Browser test | 271 checks, all pass on 2.6.0 (2026-11-22; subscriptions block in its own context at the end); update test PASS on 2.6.0; check_sw PASS on 2.6.0 |
+| Subscriptions found in expenses (her bug report 2026-11-23: "HBO Max annual till Nov 12, 2027" typed as a plain expense never appeared in Subscriptions) | Built (2.6.1, PR #9, open). "Found in your expenses" box + Track button in the add toast |
+| Browser test | 279 checks, all pass on 2.6.1 (2026-11-23; new "found" block in its own context at the very end); 271 on 2.6.0. Update test PASS and check_sw PASS on 2.6.1 |
 
 ## 7. Next steps
+- **2.6.1 (PR #9) is open.** When she says merge: `gh api -X PUT repos/isaymotion/LittleGarden/pulls/9/merge -f merge_method=merge`, then tell her to wait a minute or two and reopen the app. Then she should open Subscriptions, tap Track on HBO Max, check the date and the Auto-debit box, and tap Add subscription.
+- 2.6.1 design: an expense counts as tracked when its normalized item contains a subscription's name (or the subscription name contains the cleaned item name); ended subscriptions count too. `subGuessName` strips a date, a trailing "till/until/to/expires…" and words like annual/monthly. `guessSub`: yearly if those words appear or the date in the text is >200 days away; next = date in the text if today or later, else paid date plus cycles until not in the past. Only the last 400 days, one row per name, max 12. Auto-debit stays at its default (on); she checks it.
+- iPhone check answers from 2026-11-23: (fill in below when she replies)
 - 2.6.0 is live (merged 2026-11-22). Ask, after she has reopened the app: (0) does Add to Calendar on a subscription open the iPhone "Add to Calendar" sheet (or land in Files, where tapping it adds it)? If it does neither, switch `subCalendarFile` to `navigator.share` with a text/calendar File or a data: URL. (1) does About show 2.6.0, and are the new categories in the form? (2) does the + button open the form and does the keyboard come up? (3) does "Save to Files or iCloud" appear in Tools and backup, and does the file arrive in Files? (4) does typing a price in yen on a trip work?
 - Her Japan trip runs Nov 30 to Dec 14, 2026. She has to add the trip herself in Trips, with her own exchange rate. The app has no live rates (it makes no outside requests) and Claude must not suggest a rate from memory.
 - Trip ideas not built (offer only if she asks): a budget per trip, a trip section in the PDF report, more than one currency per trip, splitting a shared cost.

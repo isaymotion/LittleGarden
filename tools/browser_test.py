@@ -434,5 +434,41 @@ with sync_playwright() as p:
     pg.select_option('#importMode','merge'); pg.set_input_files('#importFile',{'name':'bk.json','mimeType':'application/json','buffer':json.dumps(bk).encode()}); pg.wait_for_timeout(300)
     check('subs: restored from backup',len(subs())==4)
     ctx.close()
+    # 2.6.1: subscriptions recorded as ordinary expenses are offered for tracking
+    ctx=b.new_context(viewport={'width':390,'height':844},service_workers='block',color_scheme='dark')
+    pg=ctx.new_page(); pg.on('pageerror',lambda e:errors.append(str(e)))
+    nxt=today.replace(year=today.year+1)
+    hbo_item=f"HBO Max annual till {nxt.strftime('%b')} {nxt.day}, {nxt.year}"
+    seed2=[{'id':'h1','date':d(10),'item':hbo_item,'price':1390,'category':'Subscriptions','method':'GCash','notes':''},
+           {'id':'s1','date':d(5),'item':'Spotify','price':169,'category':'Subscriptions','method':'','notes':''},
+           {'id':'s0','date':d(40),'item':'Spotify','price':169,'category':'Subscriptions','method':'','notes':''},
+           {'id':'n1','date':d(3),'item':'Netflix','price':549,'category':'Subscriptions','method':'','notes':'Auto-debit'},
+           {'id':'g1','date':d(2),'item':'Rice','price':300,'category':'Groceries','method':'','notes':''}]
+    sb2=[{'id':'x1','name':'Netflix','price':549,'cycle':'monthly','next':(today+datetime.timedelta(days=20)).isoformat(),'day':1,'auto':True,'remind':3,'method':'','status':'active'}]
+    pg.goto(URL); pg.evaluate("a=>{localStorage.clear();localStorage.setItem('little-garden-expenses-v1',a[0]);localStorage.setItem('little-garden-subscriptions-v1',a[1]);localStorage.setItem('little-garden-subs-migrated','x');}",[json.dumps(seed2),json.dumps(sb2)])
+    pg.goto(URL+'#/subscriptions'); pg.reload(); pg.wait_for_timeout(300)
+    fl=pg.inner_text('#subFoundList')
+    check('found: untracked subscription expenses listed once each',pg.is_visible('#subFound') and 'HBO Max' in fl and fl.count('Spotify')==1 and 'Netflix' not in fl and 'Rice' not in fl)
+    pg.screenshot(path=OUT+'/phone-dark-subs-found.png',full_page=True)
+    pg.locator('#subFoundList [data-found]',has_text='HBO').locator('[data-found-act=track]').click(); pg.wait_for_timeout(150)
+    check('found: Track fills the form from the name',pg.input_value('#subName')=='HBO Max' and pg.input_value('#subPrice') in ('1390','1390.00') and pg.input_value('#subCycle')=='yearly' and pg.input_value('#subNext')==nxt.isoformat() and pg.input_value('#subMethod')=='GCash')
+    pg.click('#subSaveBtn'); pg.wait_for_timeout(200)
+    subs2=pg.evaluate("JSON.parse(localStorage.getItem('little-garden-subscriptions-v1'))")
+    check('found: saved and no longer listed',any(x['name']=='HBO Max' and x['next']==nxt.isoformat() for x in subs2) and 'HBO' not in pg.inner_text('#subFoundList'))
+    pg.locator('#subFoundList [data-found]',has_text='Spotify').locator('[data-found-act=track]').click(); pg.wait_for_timeout(150)
+    check('found: monthly guess is a month after it was paid, not in the past',pg.input_value('#subCycle')=='monthly' and pg.input_value('#subNext')>=today.isoformat() and pg.input_value('#subName')=='Spotify')
+    pg.click('#subCancelBtn')
+    pg.locator('#subFoundList [data-found]',has_text='Spotify').locator('[data-found-act=skip]').click(); pg.wait_for_timeout(150)
+    check('found: Not a subscription hides the list',not pg.is_visible('#subFound'))
+    pg.goto(URL+'#/'); pg.wait_for_timeout(200); pg.click('#fabAdd'); pg.wait_for_timeout(100)
+    pg.fill('#expenseItem','Disney+ monthly'); pg.fill('#expensePrice','369'); pg.select_option('#expenseCategory','Subscriptions'); pg.click('#saveExpenseBtn'); pg.wait_for_timeout(200)
+    check('found: toast offers Track after adding one',pg.is_visible('#undoTrackBtn') and 'Track' in pg.inner_text('#undoMessage'))
+    pg.screenshot(path=OUT+'/phone-dark-subs-toast.png')
+    pg.click('#undoTrackBtn'); pg.wait_for_timeout(300)
+    check('found: toast Track opens the filled form',pg.is_visible('#subsView') and pg.input_value('#subName')=='Disney+' and not pg.is_visible('#undoToast'))
+    pg.goto(URL+'#/'); pg.wait_for_timeout(200); pg.click('#fabAdd'); pg.wait_for_timeout(100)
+    pg.fill('#expenseItem','Bread'); pg.fill('#expensePrice','80'); pg.select_option('#expenseCategory','Groceries'); pg.click('#saveExpenseBtn'); pg.wait_for_timeout(200)
+    check('found: no Track for other categories',pg.is_visible('#undoToast') and not pg.is_visible('#undoTrackBtn'))
+    ctx.close()
     b.close()
 print('ERRORS',errors)
